@@ -110,8 +110,36 @@ hrr <- function(formula, data, ps, result, areavar, testing,
     my_dots <- dots(...)
 
     if (!is.element("prior", names(my_dots))) {
-        warning("No priors specified. Sampling will probably be slow")
+        warning("No priors specified. Generating some tight default priors")
+        priors <- set_prior("student_t(3, 0, 2.5", class = "Intercept")
+        dpars <- paste0("mu", cats[-1])
+        vars <- all.vars(formula)[-1]
+        vars <- sapply(data[,vars, drop = FALSE], class)
+        cont_vars <- unlist(lapply(vars, function(x) any(x %in% c("matrix", "numeric"))))
+        cont_vars <- names(vars)[cont_vars]
+        fct_vars <- unlist(lapply(vars, function(x) any(x == c("factor"))))
+        fct_vars <- names(vars)[fct_vars]
+        ### Continuous variables
+        for (d in dpars) {
+            for (v in cont_vars) {
+                priors <- c(priors,
+                            set_prior("normal(0, 1)",
+                                      class = "b",
+                                      coef = v,
+                                      dpar = d))
+            }
+            for (v in cont_vars) {
+                priors <- c(priors,
+                            set_prior("normal(0, 2.5)",
+                                      class = "sd",
+                                      coef = v,
+                                      dpar = d))
+            }
+        }
+    } else {
+        priors <- my_dots[["priors"]]
     }
+    
     
 ### Generate some preliminary code
     prelim_code <- brms::make_stancode(formula,
@@ -126,6 +154,7 @@ hrr <- function(formula, data, ps, result, areavar, testing,
     main_code <- brms::make_stancode(formula,
                                      data = data,
                                      family = "categorical",
+                                     prior = priors,
                                      threads = threading(4),
                                      stanvars = addons)
 ### Check compiles
