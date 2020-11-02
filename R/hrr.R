@@ -111,31 +111,7 @@ hrr <- function(formula, data, ps, result, areavar, testing,
 
     if (!is.element("prior", names(my_dots))) {
         warning("No priors specified. Generating some tight default priors")
-        priors <- set_prior("student_t(3, 0, 2.5", class = "Intercept")
-        dpars <- paste0("mu", cats[-1])
-        vars <- all.vars(formula)[-1]
-        vars <- sapply(data[,vars, drop = FALSE], class)
-        cont_vars <- unlist(lapply(vars, function(x) any(x %in% c("matrix", "numeric"))))
-        cont_vars <- names(vars)[cont_vars]
-        fct_vars <- unlist(lapply(vars, function(x) any(x == c("factor"))))
-        fct_vars <- names(vars)[fct_vars]
-        ### Continuous variables
-        for (d in dpars) {
-            for (v in cont_vars) {
-                priors <- c(priors,
-                            set_prior("normal(0, 1)",
-                                      class = "b",
-                                      coef = v,
-                                      dpar = d))
-            }
-            for (v in cont_vars) {
-                priors <- c(priors,
-                            set_prior("normal(0, 2.5)",
-                                      class = "sd",
-                                      coef = v,
-                                      dpar = d))
-            }
-        }
+        priors <- autoprior(formula, data)
     } else {
         priors <- my_dots[["priors"]]
     }
@@ -443,4 +419,53 @@ hrr_data_func <- function(formula, data, ps, results, cats, areavar, depvar) {
 
 dots <- function(...) {
   eval(substitute(alist(...)))
+}
+
+autoprior <- function(formula, data) {
+    depvar <- all.vars(formula)[1]
+    cats <- levels(data[,depvar])
+    stopifnot(length(cats) > 0)
+    
+    dpars <- paste0("mu", cats[-1])
+    vars <- all.vars(formula)[-1]
+
+    fct_vars <- brms::get_prior(formula, data)$group
+    fct_vars <- unique(fct_vars[fct_vars != ""])
+
+    cont_vars <- brms::get_prior(formula, data)$coef
+    cont_vars <- unique(cont_vars[cont_vars != ""])
+    cont_vars <- unique(cont_vars[cont_vars != "Intercept"])
+### "Continuous" variables
+    for (d in dpars) {
+### Kick off by over-writing the list
+        for (v in cont_vars) {
+            if (exists("priors")) { 
+                priors <- c(priors,
+                            brms::set_prior("normal(0, 1)",
+                                            class = "b",
+                                            coef = v,
+                                            dpar = d))
+            } else {
+                priors <- brms::set_prior("normal(0, 1)",
+                                            class = "b",
+                                          coef = v,
+                                          dpar = d)
+            }
+        }
+        for (v in fct_vars) {
+            if (exists("priors")) { 
+                priors <- c(priors,
+                            brms::set_prior("normal(0, 2.5)",
+                                            class = "sd",
+                                            group = v,
+                                            dpar = d))
+            } else {                 
+                priors <- brms::set_prior("normal(0, 2.5)",
+                                          class = "sd",
+                                          group = v,
+                                          dpar = d)
+            }
+        }
+    }
+    priors
 }
