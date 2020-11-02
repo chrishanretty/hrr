@@ -4,7 +4,16 @@
 #' @param df1 a data frame
 #' @param df2 a second data frame
 #' @return returns TRUE or reports an error
-#' 
+#'
+#' @examples
+#' data(londonps)
+#' data(londonmayor)
+#' ## This works
+#' compare_dfs(~ageGroup, londonps, londonmayor)
+#' ## This complains about different classes
+#' compare_dfs(~ageGroup + ethnicity, londonps, londonmayor)
+#' londonmayor$ethnicity <- factor(londonmayor$ethnicity)
+#' compare_dfs(~ageGroup + ethnicity, londonps, londonmayor)
 compare_dfs <- function(formula,
                         df1,
                         df2) {
@@ -43,12 +52,12 @@ compare_dfs <- function(formula,
     }
     
     ## For factor variables, check the levels match
-    factor_vars <- which(var_classes %in% c("ordered", "factor"))
+    factor_vars <- which(var_classes1 %in% c("ordered", "factor"))
     if (length(factor_vars) > 0) { 
         factor_vars <- formula_vars[factor_vars]
         
-        l1 <- sapply(df1[,factor_vars], levels)
-        l2 <- sapply(df2[,factor_vars], levels)
+        l1 <- sapply(df1[,factor_vars, drop = FALSE], levels)
+        l2 <- sapply(df2[,factor_vars, drop = FALSE], levels)
         test <- all.equal(l1, l2)
 
         if(!test) {
