@@ -28,4 +28,4 @@
 #'   \item{DNV_16_count}{Borough population over 16 less total votes cast}
 #' }
 #' @source Individual data from the British Election Study. Results from 2012 and 2016 elections from \url{https://data.london.gov.uk/}
-"londonmayoral"
+"londonmayor"

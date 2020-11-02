@@ -1,3 +1,10 @@
+#' Check two data frames contain specified variables with same class and levels
+#'
+#' @param formula a one-sided formula specifying the variables to be checked
+#' @param df1 a data frame
+#' @param df2 a second data frame
+#' @return returns TRUE or reports an error
+#' 
 compare_dfs <- function(formula,
                         df1,
                         df2) {
