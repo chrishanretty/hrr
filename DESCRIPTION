@@ -8,8 +8,7 @@ Authors@R:
            email = "chris.hanretty@gmail.com",
            comment = c(ORCID = "0000-0002-8932-9405"))
 Description: This package implements hierarchical related regression, as described in Jackson et al., "Hierarchical related regression for combining aggregate and individual data in studies of socio‐economic disease risk factors". 
-License: `use_mit_license()`, `use_gpl3_license()` or friends to
-    pick a license
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
