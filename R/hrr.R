@@ -5,12 +5,15 @@
 #' @param ps data frame containing the post-stratification data; must contain variable `count`
 #' @param result data frame containing the results; must contain column names equal to levels of the dependent variable in `formula`
 #' @param areavar a character containing the name of the variable giving the area
+#' @param adapt_delta adapt_delta parameter
+#' @param max_treedepth max_treedepth parameter
 #' @param ... additional parameters passed to cmdstanr
 #' @return returns TRUE or reports an error
 #'
 #' @examples
 #' 
-hrr <- function(formula, data, ps, result, areavar, testing, ...) {
+hrr <- function(formula, data, ps, result, areavar, testing,
+                adapt_delta = 0.95, max_treedepth = 12, ...) {
 
     ### Input class checking
     if (!inherits(formula, "formula")) {
@@ -103,6 +106,13 @@ hrr <- function(formula, data, ps, result, areavar, testing, ...) {
 ### Check whether these data frames are okay to use
     test <- hrr::compare_dfs(update(formula, 1 ~ .), data, ps)
 
+    ### Check priors
+    my_dots <- dots(...)
+
+    if (!is.element("prior", names(my_dots))) {
+        warning("No priors specified. Sampling will probably be slow")
+    }
+    
 ### Generate some preliminary code
     prelim_code <- brms::make_stancode(formula,
                                  data = data,
@@ -136,12 +146,15 @@ hrr <- function(formula, data, ps, result, areavar, testing, ...) {
                                    areavar = areavar,
                                    depvar = depvar)
 
+    
     if (testing) {
-        return(list(mod, datalist))
+        return(list(mod, datalist, my_dots))
     }
     
     mod$sample(
             data = datalist,
+            adapt_delta = adapt_delta,
+            max_treedepth = max_treedepth,
             ...)
 }
 
@@ -399,3 +412,6 @@ hrr_data_func <- function(formula, data, ps, results, cats, areavar, depvar) {
     return(data)
 }
 
+dots <- function(...) {
+  eval(substitute(alist(...)))
+}
