@@ -19,3 +19,13 @@ returns TRUE or reports an error
 \description{
 Check two data frames contain specified variables with same class and levels
 }
+\examples{
+data(londonps)
+data(londonmayor)
+## This works
+compare_dfs(~ageGroup, londonps, londonmayor)
+## This complains about different classes
+compare_dfs(~ageGroup + ethnicity, londonps, londonmayor)
+londonmayor$ethnicity <- factor(londonmayor$ethnicity)
+compare_dfs(~ageGroup + ethnicity, londonps, londonmayor)
+}
