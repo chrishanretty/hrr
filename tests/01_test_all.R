@@ -22,20 +22,50 @@ londonps <- merge(londonps,
 
 ### Create the results
 res <- unique(londonmayor[,c("ONSCode",
-                             "Con_16_count",
-                             "DNV_16_count",
-                             "Green_16_count",
-                             "Lab_16_count",
-                             "LDem_16_count",
-                             "Other_16_count",
-                             "UKIP_16_count")])
+                             "Con_count_16",
+                             "DNV_count_16",
+                             "Green_count_16",
+                             "Lab_count_16",
+                             "LDem_count_16",
+                             "Other_count_16",
+                             "UKIP_count_16")])
 names(res) <- c("ONSCode", "Con", "DNV", "Green",
                 "Lab", "LDem", "Other", "UKIP")
 
-compare_dfs(vi ~ ONSCode + ageGroup + education + ethnicity + gender +
-           LabPct_sc + GreenPct_sc,
-            londonmayor, londonps)
+### Set up the priors
+library(brms)
+### Start with one
+bp <- set_prior("student_t(3, 0, 2.5", class = "Intercept", dpar = "muDNV")
 
+### Continuous variables, plus gender
+dpars <- paste0("mu", levels(factor(dat$vi))[-1])
+vars <- c("gender", "LabPct_sc", "GreenPct_sc")
+for (d in dpars) {
+    for (v in vars) {
+        bp <- c(bp,
+                set_prior("normal(0, 1)",
+                      class = "b",
+                      coef = v,
+                      dpar = d))
+    }
+}
+
+### Categorical variables
+vars <- c("ageGroup", "education", "ethnicity")
+for (d in dpars) {
+    for (v in vars) {
+        bp <- c(bp,
+                set_prior("normal(0, 5)",
+                      class = "sd",
+                      coef = v,
+                      dpar = d))
+    }
+}
+
+### Remove duplicates
+bp <- bp[duplicated(bp),]
+
+    
 test <- hrr(vi ~ (1|ONSCode) + (1|ageGroup) + (1|education) + (1|ethnicity) + gender +
         LabPct_sc + GreenPct_sc,
     data = londonmayor,
@@ -45,5 +75,5 @@ test <- hrr(vi ~ (1|ONSCode) + (1|ageGroup) + (1|education) + (1|ethnicity) + ge
     chains = 3,
     parallel_chains = 3,
     threads_per_chain = 4,
-    testing = TRUE)
+    testing = FALSE)
         

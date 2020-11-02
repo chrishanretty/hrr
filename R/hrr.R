@@ -96,7 +96,7 @@ hrr <- function(formula, data, ps, result, areavar, testing, ...) {
     }
 
 ### Check whether the results frame has negative counts in it
-    if (any(result[,cats]) < 0) {
+    if (any(result[,cats] < 0)) {
         stop("results data frame has negative counts")
     }
     
