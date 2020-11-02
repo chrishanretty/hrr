@@ -5,20 +5,155 @@
 #' @param ps data frame containing the post-stratification data; must contain variable `count`
 #' @param result data frame containing the results; must contain column names equal to levels of the dependent variable in `formula`
 #' @param areavar a character containing the name of the variable giving the area
+#' @param ... additional parameters passed to cmdstanr
 #' @return returns TRUE or reports an error
 #'
-hrr <- function(formula, data, ps, result) {
-    return(TRUE)
+#' @examples
+#' 
+hrr <- function(formula, data, ps, result, areavar, testing, ...) {
+
+    ### Input class checking
+    if (!inherits(formula, "formula")) {
+        formula <- as.formula(formula)
+    }
+    if (!inherits(data, "data.frame")) {
+        stop("data must be a data frame")
+    }
+    if (!inherits(ps, "data.frame")) {
+        stop("data must be a data frame")
+    }
+    if (!inherits(result, "data.frame")) {
+        stop("data must be a data frame")
+    }
+    if (!inherits(areavar, "character")) {
+        stop("areavar must be a character")
+    }
+
+### Coerce data frames to data.frame
+### (i.e., lose tibbles)
+    if (inherits(data, "tbl_df")) data <- as.data.frame(data)
+    if (inherits(ps, "tbl_df")) ps <- as.ps.frame(ps)
+    if (inherits(result, "tbl_df")) result <- as.result.frame(result)
+    
+### Does everything contain the area var?
+    if (!is.element(areavar, all.vars(formula))) {
+        stop(paste0("Variable ",
+                    areavar,
+                    " must be present in formula"))
+    }
+    if (!is.element(areavar, names(data))) {
+        stop(paste0("Variable ",
+             areavar,
+             " not present in data"))
+    }
+    if (!is.element(areavar, names(ps))) {
+        stop(paste0("Variable ",
+                    areavar,
+                    " not present in result"))
+    }
+    if (!is.element(areavar, names(result))) {
+        stop(paste0("Variable ",
+                    areavar,
+                    " not present in result"))
+    }
+
+    
+### Check the dep. var and its levels
+    depvar <- all.vars(formula)[1]
+    if (!is.element(depvar, names(data))) {
+        stop(paste0("Dependent variable ",
+                    depvar,
+                    " not present in data"))
+    }
+
+### If it's not a factor, coerce it as such
+    if (!inherits(data[,depvar], "factor")) {
+        data[, depvar] <- factor(data[,depvar])
+    }
+
+    cats <- levels(data[,depvar])
+    
+### Check whether the categories have any spaces in them
+    if (any(grepl(" ", cats))) {
+        stop("Levels of dependent variable cannot have whitespace")
+    }
+
+### Check the results file has these columns
+    missing_columns <- setdiff(cats, names(result))
+    if (length(missing_columns) > 0) {
+        stop(paste0("result is missing variables ",
+                    paste0(missing_columns, collapse = ", ")))
+    }
+### Arrange accordingly
+    result <- result[,c(areavar, cats)]
+
+### Check whether the ps frame has counts in it
+    if (!is.element("count", names(ps))) {
+        stop("ps data frame lacks variable count")
+    }
+    if (any(ps$count < 0)) {
+        stop("ps data frame has negative counts")
+    }
+
+### Check whether the results frame has negative counts in it
+    if (any(result[,cats]) < 0) {
+        stop("results data frame has negative counts")
+    }
+    
+### Check whether these data frames are okay to use
+    test <- hrr::compare_dfs(update(formula, 1 ~ .), data, ps)
+
+### Generate some preliminary code
+    prelim_code <- brms::make_stancode(formula,
+                                 data = data,
+                                 family = "categorical",
+                                 threads = brms::threading(4))
+    
+    addons <- hrr::hrr_code_func(prelim_code,
+                                 data = data,
+                                 depvar = depvar)
+
+    main_code <- brms::make_stancode(formula,
+                                     data = data,
+                                     family = "categorical",
+                                     threads = threading(4),
+                                     stanvars = addons)
+### Check compiles
+    sf <- paste0(tempfile(), ".stan")
+    writeLines(main_code, con = sf)
+
+### Create the model
+    mod <- cmdstanr::cmdstan_model(sf,
+                                   cpp_options = list(stan_threads = TRUE))
+
+
+### Get the data
+    datalist <- hrr::hrr_data_func(formula,
+                                   data = data,
+                                   ps = ps,
+                                   results = result,
+                                   cats = cats,
+                                   areavar = areavar,
+                                   depvar = depvar)
+
+    if (testing) {
+        return(list(mod, datalist))
+    }
+    
+    mod$sample(
+            data = datalist,
+            ...)
 }
 
-hrr_code_func <- function(code, dat, depvar) {
+
+hrr_code_func <- function(code, data, depvar) {
 ### Purpose: pull together all the stanvars
 ### Input: code and data
     ### Output: stanvars
     require(brms)
     pll_to_pred_prob(code) +
         add_ps_data_code(code) +
-        add_ps_tdata_code(levels(factor(dat[,depvar]))) +
+        add_ps_tdata_code(levels(factor(data[,depvar]))) +
         add_tpars_code(code) +
         add_model_code(code)
 }
@@ -216,42 +351,51 @@ add_model_code <- function(code) {
             block = "model")
 }
 
-hrr_data_func <- function(formula, dat, ps, res, cats) { 
+hrr_data_func <- function(formula, data, ps, results, cats, areavar, depvar) {
+
+    ### Do I need to change the threading argument?
     prelim_data <- brms::make_standata(formula,
-                          dat,
+                          data,
                           family = "categorical",
                           threads = threading(4))
+
+### Amend the ps data so that it includes the depvar
+    ps[,depvar] <- sample(data[,depvar],
+                          size = nrow(ps),
+                          replace = TRUE)
+
+### Make sure that the ps data is ordered by the geog. var
+    ps <- ps[order(ps[,areavar]),]
+### And so too are the results
+    results <- results[order(results[,areavar]),]
     
     ps_data <- brms::make_standata(formula,
-                             ps %>%
-                             mutate(vi = sample(dat$vi,
-                                                size = n(),
-                                                replace = TRUE)),
-                             family = "categorical",
-                             threads = threading(4))
+                                   ps,
+                                   family = "categorical",
+                                   threads = threading(4))
 
 ### Retain, from ps_data, anything which begins with an X_, a Z_, or or a J_
     new_ps_data <- ps_data[grep("X_|Z_|J_", names(ps_data))]
 ### Rename these variables
     names(new_ps_data) <- paste0("ps_", names(new_ps_data))
     new_ps_data$ps_N <- ps_data$N
-    new_ps_data$nAreas <- length(unique(ps$ONSCode))
-    areapos <- ps %>%
-        dplyr::mutate(rowno = 1:dplyr::n()) %>%
-        dplyr::group_by(ONSCode) %>%
-        dplyr::summarize(start = min(rowno),
-                  stop = max(rowno))
+    new_ps_data$nAreas <- length(unique(ps[, areavar]))
 
-    new_ps_data$areastart <- areapos$start
-    new_ps_data$areastop <- areapos$stop
+    ps$rowno <- 1:nrow(ps)
+
+    areapos_start <- tapply(ps$rowno, ps[,areavar], min)
+    areapos_stop <- tapply(ps$rowno, ps[,areavar], max)
+
+    new_ps_data$areastart <- areapos_start
+    new_ps_data$areastop <- areapos_stop
     new_ps_data$ps_counts <- ps$count
 ### Combine with the other data
     data <- c(prelim_data, new_ps_data)
-    data$prior_only <- 1
+    data$prior_only <- 0
 
 ### Get aggregate results out
 ### Make sure they follow the same order as the ps data
-    data$aggy <- as.matrix(res[,cats])
+    data$aggy <- as.matrix(results[,cats])
     return(data)
 }
 
