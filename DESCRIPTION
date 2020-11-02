@@ -1,13 +1,13 @@
 Package: hrr
-Title: What the Package Does (One Line, Title Case)
+Title: Hierarchical related regression for categorical outcomes
 Version: 0.0.0.9000
 Authors@R: 
-    person(given = "First",
-           family = "Last",
+    person(given = "Chris",
+           family = "Hanretty",
            role = c("aut", "cre"),
-           email = "first.last@example.com",
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
+           email = "chris.hanretty@gmail.com",
+           comment = c(ORCID = "0000-0002-8932-9405"))
+Description: This package implements hierarchical related regression, as described in Jackson et al., "Hierarchical related regression for combining aggregate and individual data in studies of socio‐economic disease risk factors". 
 License: `use_mit_license()`, `use_gpl3_license()` or friends to
     pick a license
 Encoding: UTF-8
