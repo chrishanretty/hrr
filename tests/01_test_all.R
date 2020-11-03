@@ -5,7 +5,7 @@ load_all()
 data("toydata")
 data("toyps")
 
-toyps <- as.data.frame(toydata)
+toydata <- as.data.frame(toydata)
 toyps <- as.data.frame(toyps)
 
 ### Tidy
@@ -24,10 +24,38 @@ test <- hrr(vi ~ (1|area) + (1|cat1) + (1|cat2) + (1|cat3) +
     result = res,
     areavar = "area",
     chains = 3,
+    adjust = TRUE,
     parallel_chains = 3,
     threads_per_chain = 8,
     testing = TRUE)
-        
+
+sf <- paste0(tempfile(), ".stan")
+writeLines(test[[1]]$code(), con = sf)
+
+mod <- cmdstanr::cmdstan_model(sf,
+                               cpp_options = list(stan_threads = TRUE))
+
+out <- mod$sample(data = test[[2]],
+                  parallel_chains = 3,
+                  chains = 3,
+                  threads_per_chain = 8)
+
+### This takes about ten minutes.
+test <- hrr(vi ~ (1|area) + (1|cat1) + (1|cat2) + (1|cat3) + 
+        cont1 + cont2,
+    data = toydata,
+    ps = toyps,
+    result = res,
+    areavar = "area",
+    adjust = TRUE,
+    chains = 3,
+    parallel_chains = 3,
+    threads_per_chain = 8,
+    iter_warmup = 250,
+    iter_sampling = 250,
+    init = 0,
+    testing = FALSE)
+
 s <- test$summary()
 aggs <- test$summary("aggmu")
 

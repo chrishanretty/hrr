@@ -17,7 +17,7 @@
 #' 
 hrr <- function(formula, data, ps, result, areavar,
                 testing = FALSE,
-                adjust = TRUE,
+                adjust = FALSE,
                 adapt_delta = 0.9, max_treedepth = 11, ...) {
 
     ### Input class checking
@@ -169,6 +169,9 @@ hrr <- function(formula, data, ps, result, areavar,
     if (testing) {
         return(list(mod, datalist, my_dots))
     }
+
+### Remove the prior argument from mydots
+    my_dots[["prior"]] <- NULL
     
     do.call(mod$sample,
             args = c(list(
@@ -184,12 +187,18 @@ hrr_code_func <- function(code, data, depvar, adjust) {
 ### Input: code and data
     ### Output: stanvars
     require(brms)
-    pll_to_pred_prob(code, adjust) +
+    retval <- pll_to_pred_prob(code, adjust) +
         add_ps_data_code(code) +
-        add_ps_tdata_code(levels(factor(data[,depvar]))) +
-        ### add_pars_code(code, adjust) + 
+        add_ps_tdata_code(levels(factor(data[,depvar])))
+
+    if (adjust) {
+        retval <- retval + 
+            add_pars_code(code, adjust)
+    }
+    
+    retval +
         add_tpars_code(code, adjust) +
-        add_model_code(code)
+        add_model_code(code, adjust)
 }
 
 add_ps_data_code <- function(code) {
@@ -280,7 +289,10 @@ pscode_tdata_bottom <- glue::glue('
 }
 
 pll_to_pred_prob<- function(code, adjust) {
-### Purpose: create a new stan function
+### Purpose: create a new stan function from the partial_log_lik function
+### For reference, it's declared something like this
+  ##     real partial_log_lik(int[] seq, int start, int end, int ncat, int[] Y, matrix Xc_mugreen, vector b_mugreen, real Intercept_mugreen, matrix Xc_mublue, vector b_mublue, real Intercept_mublue, int[] J_1, vector Z_1_mugreen_1, vector r_1_mugreen_1, int[] J_2, vector Z_2_mugreen_1, vector r_2_mugreen_1, int[] J_3, vector Z_3_mugreen_1, vector r_3_mugreen_1, int[] J_4, vector Z_4_mugreen_1, vector r_4_mugreen_1, int[] J_5, vector Z_5_mublue_1, vector r_5_mublue_1, int[] J_6, vector Z_6_mublue_1, vector r_6_mublue_1, int[] J_7, vector Z_7_mublue_1, vector r_7_mublue_1, int[] J_8, vector Z_8_mublue_1, vector r_8_mublue_1) {
+
 ### Input: preliminary code
 ### output: stanvar
     require(stringr)
@@ -291,10 +303,15 @@ pll_to_pred_prob<- function(code, adjust) {
                                 dotall = TRUE,
                                 multiline = TRUE))
 ### Amend the function declaration: name and return type
-    code <- stringr::str_replace(code,
+    if (adjust) {
+            code <- stringr::str_replace(code,
                         fixed("real partial_log_lik(int[] seq, "),
-                        "vector pred_prob(")
-
+                        "vector pred_prob(vector adj, ")
+    } else { 
+        code <- stringr::str_replace(code,
+                                     fixed("real partial_log_lik(int[] seq, "),
+                                     "vector pred_prob(")
+    }
 ### Amend the function declaration: additional argument
     code <- stringr::str_replace(code,
                         "vector pred_prob(.*?)\\) \\{",
@@ -306,9 +323,15 @@ pll_to_pred_prob<- function(code, adjust) {
                         "vector[ncat] pp = rep_vector(0, ncat);")
 
 ### Amend the calculation
-    code <- stringr::str_replace(code,
+    if (adjust) {
+        code <- stringr::str_replace(code,
+                        fixed("ptarget += categorical_logit_lpmf(Y[nn] | mu[n]);"),
+                        "pp += softmax(adj + mu[n]) * psweights[nn];")
+    } else {
+        code <- stringr::str_replace(code,
                         fixed("ptarget += categorical_logit_lpmf(Y[nn] | mu[n]);"),
                         "pp += softmax(mu[n]) * psweights[nn];")
+    }
 
 ### Amend the return value
     code <- stringr::str_replace(code,
@@ -321,7 +344,12 @@ pll_to_pred_prob<- function(code, adjust) {
 
 add_pars_code <- function(code, adjust) {
     if (adjust) {
+        code <- "  vector [ncat-1] adj0; "
+        code <- brms::stanvar(scode = code,
+                              position = "start",
+                              block = "parameters")
     } else {
+        code <- NULL
     }
     return(code)
 }
@@ -330,19 +358,32 @@ add_tpars_code <- function(code, adjust) {
 ### Purpose: add transformed parameters declaration
 ### Input: stan code
 ### Output: stanvar object
-    
-    top <- brms::stanvar(scode = "matrix[nAreas, ncat] aggmu;",
+
+    if (adjust) { 
+        top <- brms::stanvar(scode = "matrix[nAreas, ncat] aggmu;
+vector [ncat] adj; ",
                    block = "tparameters",
                    position = "start")
-
+    } else {
+        top <- brms::stanvar(scode = "matrix[nAreas, ncat] aggmu;",
+                             block = "tparameters",
+                             position = "start")
+        
+        }
     old_func <- stringr::str_extract(code,
                             pattern = "reduce_sum\\(partial_log_lik.*")
 
 ### Amend the beginning of the function call
-    new_func <- stringr::str_replace(old_func,
-                            fixed("reduce_sum(partial_log_lik, seq, grainsize, "),
-                            "pred_prob(areastart[i], areastop[i], ")
-
+    if (adjust) {
+        new_func <- stringr::str_replace(old_func,
+                                         fixed("reduce_sum(partial_log_lik, seq, grainsize, "),
+                                         "pred_prob(adj, areastart[i], areastop[i], ")
+    } else { 
+        new_func <- stringr::str_replace(old_func,
+                                         fixed("reduce_sum(partial_log_lik, seq, grainsize, "),
+                                         "pred_prob(areastart[i], areastop[i], ")
+    }
+    
 ### Amend the variable calls in the middle
 
     new_func <- stringr::str_replace_all(new_func,
@@ -372,12 +413,20 @@ add_tpars_code <- function(code, adjust) {
     bottom <- brms::stanvar(scode = bottom,
                       block = "tparameters",
                       position = "end")
+    if (adjust) {
+        bottom <- 
+            brms::stanvar(scode = "adj = append_row(0, adj0); ",
+                          block = "tparameters",
+                          position = "end") +
+            bottom
+    }
+    
 
     top + bottom
     
 }
 
-add_model_code <- function(code) {
+add_model_code <- function(code, adjust) {
 ### Purpose: add a sampling statement
 ### Input: preliminary code
 ### Output: stanvar
@@ -388,8 +437,16 @@ add_model_code <- function(code) {
    }
   }
 "
-    brms::stanvar(scode = scode,
-            block = "model")
+
+    if (adjust) {
+        scode <- paste0(scode, "
+   target += normal_lpdf(adj0 | 0, 1);
+", collapse = "\n")                        
+    }
+    
+    retval <- brms::stanvar(scode = scode,
+                            block = "model")
+
 }
 
 hrr_data_func <- function(formula, data, ps, results, cats, areavar, depvar) {
