@@ -24,8 +24,8 @@ test <- hrr(vi ~ (1|area) + (1|cat1) + (1|cat2) + (1|cat3) +
     result = res,
     areavar = "area",
     chains = 3,
+    cores = 3,
     adjust = TRUE,
-    parallel_chains = 3,
     threads_per_chain = 8,
     testing = TRUE)
 

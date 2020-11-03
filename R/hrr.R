@@ -135,62 +135,88 @@ hrr <- function(formula, data, ps, result, areavar,
                                  data = data,
                                  family = "categorical",
                                  threads = brms::threading(my_dots[["threads_per_chain"]]))
+
     
-    addons <- hrr::hrr_code_func(prelim_code,
+    addons <- hrr::hrr_code_func(formula = formula,
+                                 code = prelim_code,
                                  data = data,
+                                 ps = ps,
+                                 results = result,
+                                 cats = cats,
+                                 areavar = areavar,
                                  depvar = depvar,
                                  adjust = adjust)
 
-    main_code <- brms::make_stancode(formula,
-                                     data = data,
-                                     family = "categorical",
-                                     prior = my_dots[["prior"]],
-                                     threads = threading(my_dots[["threads_per_chain"]]),
-                                     stanvars = addons)
-### Check compiles
-    sf <- paste0(tempfile(), ".stan")
-    writeLines(main_code, con = sf)
-
-### Create the model
-    mod <- cmdstanr::cmdstan_model(sf,
-                                   cpp_options = list(stan_threads = TRUE))
-
-
-### Get the data
-    datalist <- hrr::hrr_data_func(formula,
-                                   data = data,
-                                   ps = ps,
-                                   results = result,
-                                   cats = cats,
-                                   areavar = areavar,
-                                   depvar = depvar)
-
-    
-    if (testing) {
-        return(list(mod, datalist, my_dots))
-    }
-
-### Remove the prior argument from mydots
+### Got to remove some stuff from my dots
+    p <- my_dots[["prior"]]
     my_dots[["prior"]] <- NULL
+    thread_count <- my_dots[["threads_per_chain"]]
+    my_dots[["threads_per_chain"]] <- NULL
+
+    do.call(brms::brm,
+            args = c(list(formula = formula,
+                        data = data,
+                        family = "categorical",
+                        prior = p,
+                        threads = brms::threading(thread_count),
+                        backend = "cmdstanr",
+                        stanvars = addons),
+                     my_dots))
     
-    do.call(mod$sample,
-            args = c(list(
-                data = datalist,
-                adapt_delta = adapt_delta,
-                max_treedepth = max_treedepth),
-                my_dots))
+##     main_code <- brms::make_stancode(formula,
+##                                      data = data,
+##                                      family = "categorical",
+##                                      prior = my_dots[["prior"]],
+##                                      threads = threading(my_dots[["threads_per_chain"]]),
+##                                      stanvars = addons)
+## ### Check compiles
+##     sf <- paste0(tempfile(), ".stan")
+##     writeLines(main_code, con = sf)
+
+## ### Create the model
+##     mod <- cmdstanr::cmdstan_model(sf,
+##                                    cpp_options = list(stan_threads = TRUE))
+
+
+## ### Get the data
+##     datalist <- hrr::hrr_data_func(formula,
+##                                    data = data,
+##                                    ps = ps,
+##                                    results = result,
+##                                    cats = cats,
+##                                    areavar = areavar,
+##                                    depvar = depvar)
+
+    
+##     if (testing) {
+##         return(list(mod, datalist, my_dots))
+##     }
+
+## ### Remove the prior argument from mydots
+##     my_dots[["prior"]] <- NULL
+    
+##     do.call(mod$sample,
+##             args = c(list(
+##                 data = datalist,
+##                 adapt_delta = adapt_delta,
+##                 max_treedepth = max_treedepth),
+##                 my_dots))
 }
 
 
-hrr_code_func <- function(code, data, depvar, adjust) {
+hrr_code_func <- function(formula, code, data, ps, results,
+                          cats, areavar, depvar, adjust) {
 ### Purpose: pull together all the stanvars
 ### Input: code and data
-    ### Output: stanvars
+### Output: stanvars
     require(brms)
     retval <- pll_to_pred_prob(code, adjust) +
-        add_ps_data_code(code) +
-        add_ps_tdata_code(levels(factor(data[,depvar])))
-
+        ## add_ps_data_code(code) +
+        add_ps_tdata_code(levels(factor(data[,depvar]))) +
+        hrr_data_func(formula, data = data, ps = ps,
+                      results = results, cats = cats,
+                      areavar = areavar, depvar = depvar)
+    
     if (adjust) {
         retval <- retval + 
             add_pars_code(code, adjust)
@@ -450,12 +476,15 @@ add_model_code <- function(code, adjust) {
 }
 
 hrr_data_func <- function(formula, data, ps, results, cats, areavar, depvar) {
-
+### Purpose: construct all the additional data as a stanvar
+### Input: whole bunch of things
+### Output: stanvar
+    
     ### Do I need to change the threading argument?
     prelim_data <- brms::make_standata(formula,
                           data,
                           family = "categorical",
-                          threads = threading(4))
+                          threads = brms::threading(4))
 
 ### Amend the ps data so that it includes the depvar
     ps[,depvar] <- sample(data[,depvar],
@@ -470,7 +499,8 @@ hrr_data_func <- function(formula, data, ps, results, cats, areavar, depvar) {
     ps_data <- brms::make_standata(formula,
                                    ps,
                                    family = "categorical",
-                                   threads = threading(4))
+                                   threads = brms::threading(4))
+
 
 ### Retain, from ps_data, anything which begins with an X_, a Z_, or or a J_
     new_ps_data <- ps_data[grep("X_|Z_|J_", names(ps_data))]
@@ -480,21 +510,32 @@ hrr_data_func <- function(formula, data, ps, results, cats, areavar, depvar) {
     new_ps_data$nAreas <- length(unique(ps[, areavar]))
 
     ps$rowno <- 1:nrow(ps)
-
+    
     areapos_start <- tapply(ps$rowno, ps[,areavar], min)
     areapos_stop <- tapply(ps$rowno, ps[,areavar], max)
 
     new_ps_data$areastart <- areapos_start
     new_ps_data$areastop <- areapos_stop
     new_ps_data$ps_counts <- ps$count
-### Combine with the other data
-    data <- c(prelim_data, new_ps_data)
-    data$prior_only <- 0
 
+### create a stanvar from this?
+    i <- 1
+    data_block <- stanvar(new_ps_data[[i]], name = names(new_ps_data)[i], block = "data")
+    for (i in 2:length(new_ps_data)) {
+        data_block <- c(data_block,
+                        stanvar(new_ps_data[[i]], name = names(new_ps_data)[i], block = "data"))
+    }
+
+### Combine with the other data
+    aggy <- as.matrix(results[,cats])
+
+    data_block <- c(data_block,
+                    stanvar(aggy,
+                            scode = "int aggy[nAreas, ncat];", block = "data"))
+    
 ### Get aggregate results out
 ### Make sure they follow the same order as the ps data
-    data$aggy <- as.matrix(results[,cats])
-    return(data)
+    return(data_block)
 }
 
 dots <- function(...) {
