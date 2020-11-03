@@ -2,78 +2,52 @@ library(devtools)
 build()
 load_all()
 
-data("londonmayor")
-data("londonps")
+data("toydata")
+data("toyps")
 
+toyps <- as.data.frame(toydata)
+toyps <- as.data.frame(toyps)
 
 ### Tidy
-fctrs <- c("ONSCode", "ageGroup", "education", "ethnicity", "gender", "vi")
-for (f in fctrs) londonmayor[,f] <- factor(londonmayor[,f])
-
-fctrs <- c("ONSCode", "ageGroup", "education", "ethnicity", "gender")
-for (f in fctrs) londonps[,f] <- factor(londonps[,f])
-
-### Add on some variables to the post-strat frame
-londonps <- merge(londonps,
-                  unique(londonmayor[,c("ONSCode", "LabPct_sc", "GreenPct_sc")]),
-                  by = "ONSCode",
-                  all.x = TRUE,
-                  all.y = FALSE)
+fctrs <- c("area", "cat1", "cat2", "cat3")
+for (f in fctrs) toydata[,f] <- factor(toydata[,f])
+for (f in fctrs) toyps[,f] <- factor(toyps[,f])
 
 ### Create the results
-res <- unique(londonmayor[,c("ONSCode",
-                             "Con_count_16",
-                             "DNV_count_16",
-                             "Green_count_16",
-                             "Lab_count_16",
-                             "LDem_count_16",
-                             "Other_count_16",
-                             "UKIP_count_16")])
-names(res) <- c("ONSCode", "Con", "DNV", "Green",
-                "Lab", "LDem", "Other", "UKIP")
-
-### Set up the priors
-library(brms)
-### Start with one
-## bp <- set_prior("student_t(3, 0, 2.5", class = "Intercept", dpar = "muDNV")
-
-## ### Continuous variables, plus gender
-## dpars <- paste0("mu", levels(factor(dat$vi))[-1])
-## vars <- c("gender", "LabPct_sc", "GreenPct_sc")
-## for (d in dpars) {
-##     for (v in vars) {
-##         bp <- c(bp,
-##                 set_prior("normal(0, 1)",
-##                       class = "b",
-##                       coef = v,
-##                       dpar = d))
-##     }
-## }
-
-## ### Categorical variables
-## vars <- c("ageGroup", "education", "ethnicity")
-## for (d in dpars) {
-##     for (v in vars) {
-##         bp <- c(bp,
-##                 set_prior("normal(0, 5)",
-##                       class = "sd",
-##                       coef = v,
-##                       dpar = d))
-##     }
-## }
-
-## ### Remove duplicates
-## bp <- bp[duplicated(bp),]
-
+res <- unique(toydata[,c("area",
+                         "red", "green", "blue")])
     
-test <- hrr(vi ~ (1|ONSCode) + (1|ageGroup) + (1|education) + (1|ethnicity) + gender +
-        LabPct_sc + GreenPct_sc,
-    data = londonmayor,
-    ps = londonps,
+test <- hrr(vi ~ (1|area) + (1|cat1) + (1|cat2) + (1|cat3) + 
+        cont1 + cont2,
+    data = toydata,
+    ps = toyps,
     result = res,
-    areavar = "ONSCode",
+    areavar = "area",
     chains = 3,
     parallel_chains = 3,
     threads_per_chain = 8,
-    testing = FALSE)
+    testing = TRUE)
         
+s <- test$summary()
+aggs <- test$summary("aggmu")
+
+### Do these match what we know the result to be?
+aggs <- aggs %>%
+    tidyr::separate(variable, into = c("var1", "var2"), sep = ",") %>%
+    dplyr::mutate(var1 = gsub("[^0-9]", "", var1),
+           var1 = as.numeric(var1),
+           var2 = gsub("[^0-9]", "", var2),
+           var2 = as.numeric(var2)) %>%
+    dplyr::mutate(ONSCode = levels(londonps$ONSCode)[var1],
+                  party = levels(londonmayor$vi)[var2]) %>%
+    dplyr::select(ONSCode, party, mean, q5, q95)
+
+### Merge this with the results
+res[,-1] <- res[,-1] / rowSums(res[,-1])
+res <- res %>%
+    tidyr::pivot_longer(cols = -ONSCode,
+                        names_to = "party")
+
+comb <- merge(aggs, res,
+              by = c("ONSCode", "party"),
+              all = TRUE)

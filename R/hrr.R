@@ -5,6 +5,9 @@
 #' @param ps data frame containing the post-stratification data; must contain variable `count`
 #' @param result data frame containing the results; must contain column names equal to levels of the dependent variable in `formula`
 #' @param areavar a character containing the name of the variable giving the area
+#' @param testing if testing is set to TRUE, the return value will be a list of model objects, but no samples
+#' @param adjust Can aggregate predictions from individual evidence be adjusted?
+#' @param dirichlet Use Dirichlet-Multinomial rather than multinomial
 #' @param adapt_delta adapt_delta parameter
 #' @param max_treedepth max_treedepth parameter
 #' @param ... additional parameters passed to cmdstanr
@@ -12,8 +15,10 @@
 #'
 #' @examples
 #' 
-hrr <- function(formula, data, ps, result, areavar, testing,
-                adapt_delta = 0.95, max_treedepth = 12, ...) {
+hrr <- function(formula, data, ps, result, areavar,
+                testing = FALSE,
+                adjust = TRUE,
+                adapt_delta = 0.9, max_treedepth = 11, ...) {
 
     ### Input class checking
     if (!inherits(formula, "formula")) {
@@ -35,8 +40,8 @@ hrr <- function(formula, data, ps, result, areavar, testing,
 ### Coerce data frames to data.frame
 ### (i.e., lose tibbles)
     if (inherits(data, "tbl_df")) data <- as.data.frame(data)
-    if (inherits(ps, "tbl_df")) ps <- as.ps.frame(ps)
-    if (inherits(result, "tbl_df")) result <- as.result.frame(result)
+    if (inherits(ps, "tbl_df")) ps <- as.data.frame(ps)
+    if (inherits(result, "tbl_df")) result <- as.data.frame(result)
     
 ### Does everything contain the area var?
     if (!is.element(areavar, all.vars(formula))) {
@@ -98,7 +103,11 @@ hrr <- function(formula, data, ps, result, areavar, testing,
         stop("ps data frame has negative counts")
     }
 
-### Check whether the results frame has negative counts in it
+### Check whether the results frame has missing values or negative counts in it
+    if (any(is.na(result[,cats]))) {
+        stop("results data frame has missing values")
+    }
+    
     if (any(result[,cats] < 0)) {
         stop("results data frame has negative counts")
     }
@@ -111,27 +120,32 @@ hrr <- function(formula, data, ps, result, areavar, testing,
 
     if (!is.element("prior", names(my_dots))) {
         warning("No priors specified. Generating some tight default priors")
-        priors <- autoprior(formula, data)
-    } else {
-        priors <- my_dots[["priors"]]
+        my_dots[["prior"]] <- autoprior(formula, data)
     }
-    
+
+    ### Check threads argument
+    if (!is.element("threads_per_chain", names(my_dots))) {
+        warning("threads_per_chain not specified. Setting to two threads per chain")
+        my_dots[["threads_per_chain"]] <- 2
+    }
+
     
 ### Generate some preliminary code
     prelim_code <- brms::make_stancode(formula,
                                  data = data,
                                  family = "categorical",
-                                 threads = brms::threading(4))
+                                 threads = brms::threading(my_dots[["threads_per_chain"]]))
     
     addons <- hrr::hrr_code_func(prelim_code,
                                  data = data,
-                                 depvar = depvar)
+                                 depvar = depvar,
+                                 adjust = adjust)
 
     main_code <- brms::make_stancode(formula,
                                      data = data,
                                      family = "categorical",
-                                     prior = priors,
-                                     threads = threading(4),
+                                     prior = my_dots[["prior"]],
+                                     threads = threading(my_dots[["threads_per_chain"]]),
                                      stanvars = addons)
 ### Check compiles
     sf <- paste0(tempfile(), ".stan")
@@ -156,23 +170,25 @@ hrr <- function(formula, data, ps, result, areavar, testing,
         return(list(mod, datalist, my_dots))
     }
     
-    mod$sample(
-            data = datalist,
-            adapt_delta = adapt_delta,
-            max_treedepth = max_treedepth,
-            ...)
+    do.call(mod$sample,
+            args = c(list(
+                data = datalist,
+                adapt_delta = adapt_delta,
+                max_treedepth = max_treedepth),
+                my_dots))
 }
 
 
-hrr_code_func <- function(code, data, depvar) {
+hrr_code_func <- function(code, data, depvar, adjust) {
 ### Purpose: pull together all the stanvars
 ### Input: code and data
     ### Output: stanvars
     require(brms)
-    pll_to_pred_prob(code) +
+    pll_to_pred_prob(code, adjust) +
         add_ps_data_code(code) +
         add_ps_tdata_code(levels(factor(data[,depvar]))) +
-        add_tpars_code(code) +
+        ### add_pars_code(code, adjust) + 
+        add_tpars_code(code, adjust) +
         add_model_code(code)
 }
 
@@ -263,7 +279,7 @@ pscode_tdata_bottom <- glue::glue('
 
 }
 
-pll_to_pred_prob<- function(code) {
+pll_to_pred_prob<- function(code, adjust) {
 ### Purpose: create a new stan function
 ### Input: preliminary code
 ### output: stanvar
@@ -303,7 +319,14 @@ pll_to_pred_prob<- function(code) {
             block = "functions")
 } 
 
-add_tpars_code <- function(code) {
+add_pars_code <- function(code, adjust) {
+    if (adjust) {
+    } else {
+    }
+    return(code)
+}
+
+add_tpars_code <- function(code, adjust) {
 ### Purpose: add transformed parameters declaration
 ### Input: stan code
 ### Output: stanvar object
