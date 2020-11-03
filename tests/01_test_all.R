@@ -75,5 +75,5 @@ test <- hrr(vi ~ (1|ONSCode) + (1|ageGroup) + (1|education) + (1|ethnicity) + ge
     chains = 3,
     parallel_chains = 3,
     threads_per_chain = 8,
-    testing = TRUE)
+    testing = FALSE)
         
