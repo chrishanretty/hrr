@@ -119,13 +119,15 @@ hrr <- function(formula, data, ps, result, areavar,
     my_dots <- dots(...)
 
     if (!is.element("prior", names(my_dots))) {
-        warning("No priors specified. Generating some tight default priors")
+        warning("No priors specified. Generating some tight default priors",
+                immediate. = TRUE)
         my_dots[["prior"]] <- autoprior(formula, data)
     }
 
     ### Check threads argument
     if (!is.element("threads_per_chain", names(my_dots))) {
-        warning("threads_per_chain not specified. Setting to two threads per chain")
+        warning("threads_per_chain not specified. Setting to two threads per chain",
+                immediate. = TRUE)
         my_dots[["threads_per_chain"]] <- 2
     }
 
