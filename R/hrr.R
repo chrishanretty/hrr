@@ -155,54 +155,27 @@ hrr <- function(formula, data, ps, result, areavar,
     thread_count <- my_dots[["threads_per_chain"]]
     my_dots[["threads_per_chain"]] <- NULL
 
+    ### Set grainsize
+    grainsize <- nrow(data) / (thread_count * 2)
+### Permute data to help multithreading (see manual, "To ensure that
+    ### chunks (whose size is defined by grainsize) require roughly
+    ### the same amount of computing time, we recommend storing
+### observations in random order in the data.")
+    data <- data[sample(1:nrow(data), size = nrow(data), replace = FALSE),]
+
+    ### Execute the call
     do.call(brms::brm,
             args = c(list(formula = formula,
                         data = data,
                         family = "categorical",
                         prior = p,
-                        threads = brms::threading(thread_count),
+                        threads = brms::threading(thread_count,
+                                                  grainsize = grainsize),
                         backend = "cmdstanr",
                         stanvars = addons),
                      my_dots))
-    
-##     main_code <- brms::make_stancode(formula,
-##                                      data = data,
-##                                      family = "categorical",
-##                                      prior = my_dots[["prior"]],
-##                                      threads = threading(my_dots[["threads_per_chain"]]),
-##                                      stanvars = addons)
-## ### Check compiles
-##     sf <- paste0(tempfile(), ".stan")
-##     writeLines(main_code, con = sf)
+ 
 
-## ### Create the model
-##     mod <- cmdstanr::cmdstan_model(sf,
-##                                    cpp_options = list(stan_threads = TRUE))
-
-
-## ### Get the data
-##     datalist <- hrr::hrr_data_func(formula,
-##                                    data = data,
-##                                    ps = ps,
-##                                    results = result,
-##                                    cats = cats,
-##                                    areavar = areavar,
-##                                    depvar = depvar)
-
-    
-##     if (testing) {
-##         return(list(mod, datalist, my_dots))
-##     }
-
-## ### Remove the prior argument from mydots
-##     my_dots[["prior"]] <- NULL
-    
-##     do.call(mod$sample,
-##             args = c(list(
-##                 data = datalist,
-##                 adapt_delta = adapt_delta,
-##                 max_treedepth = max_treedepth),
-##                 my_dots))
 }
 
 
