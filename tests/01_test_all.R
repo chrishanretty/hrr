@@ -19,9 +19,10 @@ res <- unique(toydata[,c("area",
 
 
 ### With adapt_delta = 0.95 and max_treedepth = 15,
-### This takes 6 hours
+### This takes 6 hours with no dirichlet sampling
 ### Drop down to threedepth = 14 and you get 41% hitting the max.
 ### but ESS is mostly okay. Saves you 20 minutes or so.
+### With dirichlet sampling, then we're laughing, just 20 minutes
 test <- hrr(vi ~ (1|area) + (1|cat1) + (1|cat2) + (1|cat3) + 
         cont1 + cont2,
     data = toydata,
@@ -33,6 +34,7 @@ test <- hrr(vi ~ (1|area) + (1|cat1) + (1|cat2) + (1|cat3) +
     adjust = FALSE,
     threads_per_chain = 8,
     testing = FALSE,
+    dirichlet = TRUE,
     control = list(max_treedepth = 14,
                    adapt_delta = 0.95))
 
@@ -70,6 +72,7 @@ londonps <- merge(londonps,
 
 londonps$count <- as.integer(londonps$count)
 
+### With dirichlet = TRUE, we're talking just under 4 hours
 test2 <- hrr(vi ~ (1|ONSCode) + (1|ageGroup) + (1|education) +
                  (1|ethnicity) +  gender + log1p(days_after_elex) + 
                  LabPct + LDemPct + GreenPct,
@@ -82,7 +85,8 @@ test2 <- hrr(vi ~ (1|ONSCode) + (1|ageGroup) + (1|education) +
              adjust = FALSE,
              threads_per_chain = 8,
              testing = FALSE,
-             control = list(max_treedepth = 15,
+             dirichlet = TRUE,
+             control = list(max_treedepth = 12,
                             adapt_delta = 0.95))
 
 saveRDS(test2, file = "../inst/extdata/toy_run.rds")

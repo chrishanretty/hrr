@@ -5,7 +5,7 @@
 #' @param ps data frame containing the post-stratification data; must contain variable `count`
 #' @param result data frame containing the results; must contain column names equal to levels of the dependent variable in `formula`
 #' @param areavar a character containing the name of the variable giving the area
-#' @param testing if testing is set to TRUE, the return value will be a list of model objects, but no samples
+#' @param testing if testing is set to TRUE, brms will use the prior only, no data
 #' @param adjust Can aggregate predictions from individual evidence be adjusted?
 #' @param dirichlet Use Dirichlet-Multinomial rather than multinomial
 #' @param adapt_delta adapt_delta parameter
@@ -18,6 +18,7 @@
 hrr <- function(formula, data, ps, result, areavar,
                 testing = FALSE,
                 adjust = FALSE,
+                dirichlet = FALSE,
                 adapt_delta = 0.9, max_treedepth = 11, ...) {
 
     ### Input class checking
@@ -151,7 +152,8 @@ hrr <- function(formula, data, ps, result, areavar,
                                  cats = cats,
                                  areavar = areavar,
                                  depvar = depvar,
-                                 adjust = adjust)
+                                 adjust = adjust,
+                                 dirichlet = dirichlet)
 
 ### Got to remove some stuff from my dots
     p <- my_dots[["prior"]]
@@ -168,9 +170,8 @@ hrr <- function(formula, data, ps, result, areavar,
 ### observations in random order in the data.")
     data <- data[sample(1:nrow(data), size = nrow(data), replace = FALSE),]
 
-    ### Execute the call
-    do.call(brms::brm,
-            args = c(list(formula = formula,
+
+    brms_args <- c(list(formula = formula,
                         data = data,
                         family = "categorical",
                         prior = p,
@@ -178,33 +179,58 @@ hrr <- function(formula, data, ps, result, areavar,
                                                   grainsize = grainsize),
                         backend = "cmdstanr",
                         stanvars = addons),
-                     my_dots))
+                   my_dots)
+
+    if(testing) brms_args[["sample_prior"]] <- "only"
+    
+    ### Execute the call
+    do.call(brms::brm,
+            args = brms_args)
  
 
 }
 
 
 hrr_code_func <- function(formula, code, data, ps, results,
-                          cats, areavar, depvar, adjust) {
+                          cats, areavar, depvar, adjust, dirichlet) {
 ### Purpose: pull together all the stanvars
 ### Input: code and data
 ### Output: stanvars
     require(brms)
-    retval <- pll_to_pred_prob(code, adjust) +
-        ## add_ps_data_code(code) +
+    retval <- pll_to_pred_prob(code, adjust)
+
+    if (dirichlet) {
+        retval <- retval + dm_func()
+    }
+    ## add_ps_data_code(code) +
+    retval <- retval +
         add_ps_tdata_code(levels(factor(data[,depvar]))) +
         hrr_data_func(formula, data = data, ps = ps,
                       results = results, cats = cats,
                       areavar = areavar, depvar = depvar)
     
-    if (adjust) {
+    if (adjust|dirichlet) {
         retval <- retval + 
-            add_pars_code(code, adjust)
+            add_pars_code(code, adjust, dirichlet)
     }
     
     retval +
         add_tpars_code(code, adjust) +
-        add_model_code(code, adjust)
+        add_model_code(code, adjust, dirichlet, data, results)
+}
+
+dm_func <- function() {
+    scode <- "
+  real dirichlet_multinomial_lpmf(int[] y, vector alpha) {
+    real alpha_plus = sum(alpha);
+  
+    return lgamma(alpha_plus) + sum(lgamma(alpha + to_vector(y))) 
+                - lgamma(alpha_plus+sum(y)) - sum(lgamma(alpha));
+  }
+"
+    brms::stanvar(scode = scode,
+                  block = "functions")
+                  
 }
 
 add_ps_data_code <- function(code) {
@@ -348,15 +374,20 @@ pll_to_pred_prob<- function(code, adjust) {
             block = "functions")
 } 
 
-add_pars_code <- function(code, adjust) {
+add_pars_code <- function(code, adjust, dirichlet) {
+    code <- ""
     if (adjust) {
         code <- "  vector [ncat-1] adj0; "
-        code <- brms::stanvar(scode = code,
-                              position = "start",
-                              block = "parameters")
-    } else {
-        code <- NULL
+
     }
+    if (dirichlet) {
+        code <- paste0(code, "
+  real <lower=0>prec;
+")
+    }
+    code <- brms::stanvar(scode = code,
+                          position = "start",
+                          block = "parameters")
     return(code)
 }
 
@@ -432,22 +463,54 @@ vector [ncat] adj; ",
     
 }
 
-add_model_code <- function(code, adjust) {
+add_model_code <- function(code, adjust, dirichlet, data, results) {
 ### Purpose: add a sampling statement
 ### Input: preliminary code
 ### Output: stanvar
-    scode <- "
+    if (dirichlet) {
+        scode <- "
+  if (!prior_only) {
+   for (i in 1:nAreas) { 
+      aggy[i] ~ dirichlet_multinomial(prec * to_vector(aggmu[i]));
+   }
+  }
+"
+    } else { 
+        scode <- "
   if (!prior_only) {
    for (i in 1:nAreas) { 
       aggy[i] ~ multinomial(to_vector(aggmu[i]));
    }
   }
 "
+    }
+    
 
     if (adjust) {
         scode <- paste0(scode, "
    target += normal_lpdf(adj0 | 0, 1);
 ", collapse = "\n")                        
+    }
+            
+    if (dirichlet) {
+        ## The median on the normal scale should equal nrow(dat) / nAreas
+        ## and we should assign zero probability to a pseudo count greater than the observed total in any area
+        log_m <- log(nrow(data) / nrow(results))
+        ## Upper bound
+        ub <- mean(rowSums(results[,-1]))
+        ## Possible values for SD on the log scale
+        inseq <- seq(1, 4, length.out = 100)
+        ## Pseudo counts out
+        pseudo_counts <- qlnorm(p = 0.99, meanlog = log_m, sdlog = inseq)
+        log_sd <- max(inseq[which(pseudo_counts < ub)])
+        scode <- paste0(scode, "
+// have a sensible default prior for the precision parameter here
+   target += lognormal_lpdf(prec | ",
+log_m,
+", ",
+log_sd,
+");",
+collapse = "\n")                        
     }
     
     retval <- brms::stanvar(scode = scode,
@@ -538,6 +601,18 @@ autoprior <- function(formula, data) {
     cont_vars <- unique(cont_vars[cont_vars != "Intercept"])
 ### "Continuous" variables
     for (d in dpars) {
+        if (exists("priors")) {
+            priors <- c(priors,
+                        brms::set_prior("normal(0, 2.5)",
+                                        class = "Intercept",
+                                        dpar = d))
+        } else {
+            priors <- brms::set_prior("normal(0, 2.5)",
+                                      class = "Intercept",
+                                      dpar = d)
+        }
+        
+        
 ### Kick off by over-writing the list
         for (v in cont_vars) {
             if (exists("priors")) { 
@@ -548,7 +623,7 @@ autoprior <- function(formula, data) {
                                             dpar = d))
             } else {
                 priors <- brms::set_prior("normal(0, 1)",
-                                            class = "b",
+                                          class = "b",
                                           coef = v,
                                           dpar = d)
             }
