@@ -103,6 +103,9 @@ hrr <- function(formula, data, ps, result, areavar,
         stop("ps data frame has negative counts")
     }
 
+### Coerce to integer
+    ps$count <- as.integer(ps$count)
+    
 ### Check whether the results frame has missing values or negative counts in it
     if (any(is.na(result[,cats]))) {
         stop("results data frame has missing values")
@@ -111,7 +114,8 @@ hrr <- function(formula, data, ps, result, areavar,
     if (any(result[,cats] < 0)) {
         stop("results data frame has negative counts")
     }
-    
+
+
 ### Check whether these data frames are okay to use
     test <- hrr::compare_dfs(update(formula, 1 ~ .), data, ps)
 
@@ -156,7 +160,8 @@ hrr <- function(formula, data, ps, result, areavar,
     my_dots[["threads_per_chain"]] <- NULL
 
     ### Set grainsize
-    grainsize <- nrow(data) / (thread_count * 2)
+    grainsize <- floor(nrow(data) / (thread_count * 2))
+    message(paste0("Setting grainsize to ", grainsize))
 ### Permute data to help multithreading (see manual, "To ensure that
     ### chunks (whose size is defined by grainsize) require roughly
     ### the same amount of computing time, we recommend storing
