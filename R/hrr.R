@@ -14,7 +14,8 @@
 #' @return returns TRUE or reports an error
 #'
 #' @examples
-#' 
+#'
+#' @export
 hrr <- function(formula, data, ps, result, areavar,
                 testing = FALSE,
                 adjust = FALSE,
@@ -23,7 +24,7 @@ hrr <- function(formula, data, ps, result, areavar,
 
     ### Input class checking
     if (!inherits(formula, "formula")) {
-        formula <- as.formula(formula)
+        formula <- stats::as.formula(formula)
     }
     if (!inherits(data, "data.frame")) {
         stop("data must be a data frame")
@@ -118,7 +119,7 @@ hrr <- function(formula, data, ps, result, areavar,
 
 
 ### Check whether these data frames are okay to use
-    test <- hrr::compare_dfs(update(formula, 1 ~ .), data, ps)
+    test <- hrr::compare_dfs(stats::update(formula, 1 ~ .), data, ps)
 
     ### Check priors
     my_dots <- dots(...)
@@ -144,16 +145,16 @@ hrr <- function(formula, data, ps, result, areavar,
                                  threads = brms::threading(my_dots[["threads_per_chain"]]))
 
     
-    addons <- hrr::hrr_code_func(formula = formula,
-                                 code = prelim_code,
-                                 data = data,
-                                 ps = ps,
-                                 results = result,
-                                 cats = cats,
-                                 areavar = areavar,
-                                 depvar = depvar,
-                                 adjust = adjust,
-                                 dirichlet = dirichlet)
+    addons <- hrr:::hrr_code_func(formula = formula,
+                                  code = prelim_code,
+                                  data = data,
+                                  ps = ps,
+                                  results = result,
+                                  cats = cats,
+                                  areavar = areavar,
+                                  depvar = depvar,
+                                  adjust = adjust,
+                                  dirichlet = dirichlet)
 
 ### Got to remove some stuff from my dots
     p <- my_dots[["prior"]]
@@ -170,23 +171,47 @@ hrr <- function(formula, data, ps, result, areavar,
 ### observations in random order in the data.")
     data <- data[sample(1:nrow(data), size = nrow(data), replace = FALSE),]
 
-
-    brms_args <- c(list(formula = formula,
-                        data = data,
-                        family = "categorical",
-                        prior = p,
-                        threads = brms::threading(thread_count,
-                                                  grainsize = grainsize),
-                        backend = "cmdstanr",
-                        stanvars = addons),
-                   my_dots)
-
-    if(testing) brms_args[["sample_prior"]] <- "only"
-    
-    ### Execute the call
-    do.call(brms::brm,
-            args = brms_args)
- 
+    if (testing) {
+        code <- brms::make_stancode(formula = formula,
+                                    data = data,
+                                    family = "categorical",
+                                    stanvars = addons,
+                                    prior = p,
+                                    threads = brms::threading(thread_count,
+                                                              grainsize = grainsize))
+        data <- brms::make_standata(formula = formula,
+                                    data = data,
+                                    family = "categorical",
+                                    stanvars = addons,
+                                    prior = p,
+                                    threads = brms::threading(thread_count,
+                                                              grainsize = grainsize))
+        retval <- list(code = code,
+                       data = data,
+                       prior = p)
+    } else { 
+        brms_args <- c(list(formula = formula,
+                            data = data,
+                            family = "categorical",
+                            prior = p,
+                            threads = brms::threading(thread_count,
+                                                      grainsize = grainsize),
+                            backend = "cmdstanr",
+                            stanvars = addons),
+                       my_dots)
+        
+        
+        if ("algorithm" %in% names(my_dots)) {
+            if (my_dots[["algorithm"]] != "sampling") {
+                brms_args[["threads"]] <- NULL
+            }
+        }
+        
+### Execute the call
+        retval <- do.call(brms::brm,
+                          args = brms_args)
+    }
+    return(retval)
 
 }
 
@@ -196,7 +221,7 @@ hrr_code_func <- function(formula, code, data, ps, results,
 ### Purpose: pull together all the stanvars
 ### Input: code and data
 ### Output: stanvars
-    require(brms)
+
     retval <- pll_to_pred_prob(code, adjust)
 
     if (dirichlet) {
@@ -237,17 +262,17 @@ add_ps_data_code <- function(code) {
 ### Purpose: produce a stanvar object with data declarations for the post-strat. data
 ### Input: stan code
 ### Output: stanvar object
-    require(stringr)
-    require(brms)
+    ## require(stringr)
+    ## require(brms)
 ### We need to get the existing data block
     data_block <- stringr::str_extract(code,
-                              pattern = regex("data \\{.*\\}\ntransformed data \\{",
+                              pattern = stringr::regex("data \\{.*\\}\ntransformed data \\{",
                                               multiline = TRUE,
                                               dotall = TRUE))
 
 ### Keep those lines which begin with X_, Z_, or J_
     data_block <- stringr::str_extract_all(data_block,
-                              pattern = regex(".*(X_|Z_|J_).*",
+                              pattern = stringr::regex(".*(X_|Z_|J_).*",
                                               multiline = FALSE))[[1]]
 
 ### Replace these entries with ps_X_, etc.,
@@ -257,11 +282,11 @@ add_ps_data_code <- function(code) {
 
 ### Replace references to N with ps_N
     data_block <- stringr::str_replace(data_block,
-                              pattern = fixed("[N]"),
+                              pattern = stringr::fixed("[N]"),
                               replacement = "[ps_N]")
     
     data_block <- stringr::str_replace(data_block,
-                              pattern = fixed("[N, "),
+                              pattern = stringr::fixed("[N, "),
                               replacement = "[ps_N, ")
 
 ### Add on the other things we need in this block;
@@ -292,8 +317,7 @@ add_ps_tdata_code <- function(cats) {
 ### Purpose: add data transformations to the transformed data block
 ### Input: list of output levels
 ### Output: stanvar
-    require(glue)
-    require(brms)
+
     cats <- cats[-1]
     if (any(grepl(" ", cats))) {
         stop("Don't yet know how to handle outcome levels with whitespace")
@@ -327,21 +351,21 @@ pll_to_pred_prob<- function(code, adjust) {
 
 ### Input: preliminary code
 ### output: stanvar
-    require(stringr)
-    require(brms)
+    ## require(stringr)
+    ## require(brms)
     ## Get the function code
     code <- stringr::str_extract(code,
-                pattern = regex("real partial_log_lik.*return ptarget;\\s+\\}",
+                pattern = stringr::regex("real partial_log_lik.*return ptarget;\\s+\\}",
                                 dotall = TRUE,
                                 multiline = TRUE))
 ### Amend the function declaration: name and return type
     if (adjust) {
             code <- stringr::str_replace(code,
-                        fixed("real partial_log_lik(int[] seq, "),
+                        stringr::fixed("real partial_log_lik(int[] seq, "),
                         "vector pred_prob(vector adj, ")
     } else { 
         code <- stringr::str_replace(code,
-                                     fixed("real partial_log_lik(int[] seq, "),
+                                     stringr::fixed("real partial_log_lik(int[] seq, "),
                                      "vector pred_prob(")
     }
 ### Amend the function declaration: additional argument
@@ -357,17 +381,17 @@ pll_to_pred_prob<- function(code, adjust) {
 ### Amend the calculation
     if (adjust) {
         code <- stringr::str_replace(code,
-                        fixed("ptarget += categorical_logit_lpmf(Y[nn] | mu[n]);"),
+                        stringr::fixed("ptarget += categorical_logit_lpmf(Y[nn] | mu[n]);"),
                         "pp += softmax(adj + mu[n]) * psweights[nn];")
     } else {
         code <- stringr::str_replace(code,
-                        fixed("ptarget += categorical_logit_lpmf(Y[nn] | mu[n]);"),
+                        stringr::fixed("ptarget += categorical_logit_lpmf(Y[nn] | mu[n]);"),
                         "pp += softmax(mu[n]) * psweights[nn];")
     }
 
 ### Amend the return value
     code <- stringr::str_replace(code,
-                        fixed("return ptarget;"),
+                        stringr::fixed("return ptarget;"),
                         "return (pp / sum(pp));")
 
     brms::stanvar(scode = code,
@@ -413,31 +437,31 @@ vector [ncat] adj; ",
 ### Amend the beginning of the function call
     if (adjust) {
         new_func <- stringr::str_replace(old_func,
-                                         fixed("reduce_sum(partial_log_lik, seq, grainsize, "),
+                                         stringr::fixed("reduce_sum(partial_log_lik, seq, grainsize, "),
                                          "pred_prob(adj, areastart[i], areastop[i], ")
     } else { 
         new_func <- stringr::str_replace(old_func,
-                                         fixed("reduce_sum(partial_log_lik, seq, grainsize, "),
+                                         stringr::fixed("reduce_sum(partial_log_lik, seq, grainsize, "),
                                          "pred_prob(areastart[i], areastop[i], ")
     }
     
 ### Amend the variable calls in the middle
 
     new_func <- stringr::str_replace_all(new_func,
-                                fixed("Xc_"),
+                                stringr::fixed("Xc_"),
                                 "ps_Xc_")
     
     new_func <- stringr::str_replace_all(new_func,
-                                fixed("J_"),
+                                stringr::fixed("J_"),
                                 "ps_J_")
     
     new_func <- stringr::str_replace_all(new_func,
-                                fixed("Z_"),
+                                stringr::fixed("Z_"),
                                 "ps_Z_")
 
 ### Amend the end by adding psweights arg);
     new_func <- stringr::str_replace(new_func,
-                        fixed(");"),
+                        stringr::fixed(");"),
                         ", ps_counts)';")
     
     bottom <- paste0("
@@ -501,7 +525,9 @@ add_model_code <- function(code, adjust, dirichlet, data, results) {
         ## Possible values for SD on the log scale
         inseq <- seq(1, 4, length.out = 100)
         ## Pseudo counts out
-        pseudo_counts <- qlnorm(p = 0.99, meanlog = log_m, sdlog = inseq)
+        pseudo_counts <- stats::qlnorm(p = 0.99,
+                                       meanlog = log_m,
+                                       sdlog = inseq)
         log_sd <- max(inseq[which(pseudo_counts < ub)])
         scode <- paste0(scode, "
 // have a sensible default prior for the precision parameter here
@@ -563,18 +589,24 @@ hrr_data_func <- function(formula, data, ps, results, cats, areavar, depvar) {
 
 ### create a stanvar from this?
     i <- 1
-    data_block <- stanvar(new_ps_data[[i]], name = names(new_ps_data)[i], block = "data")
+    data_block <- brms::stanvar(new_ps_data[[i]],
+                                name = names(new_ps_data)[i],
+                                block = "data")
+    
     for (i in 2:length(new_ps_data)) {
         data_block <- c(data_block,
-                        stanvar(new_ps_data[[i]], name = names(new_ps_data)[i], block = "data"))
+                        brms::stanvar(new_ps_data[[i]],
+                                      name = names(new_ps_data)[i],
+                                      block = "data"))
     }
 
 ### Combine with the other data
     aggy <- as.matrix(results[,cats])
 
     data_block <- c(data_block,
-                    stanvar(aggy,
-                            scode = "int aggy[nAreas, ncat];", block = "data"))
+                    brms::stanvar(aggy,
+                            scode = "int aggy[nAreas, ncat];",
+                            block = "data"))
     
 ### Get aggregate results out
 ### Make sure they follow the same order as the ps data

@@ -25,7 +25,10 @@ data(londonmayor)
 ## This works
 compare_dfs(~ageGroup, londonps, londonmayor)
 ## This complains about different classes
+\dontrun{
 compare_dfs(~ageGroup + ethnicity, londonps, londonmayor)
+}
 londonmayor$ethnicity <- factor(londonmayor$ethnicity)
 compare_dfs(~ageGroup + ethnicity, londonps, londonmayor)
+
 }

@@ -11,16 +11,20 @@
 #' ## This works
 #' compare_dfs(~ageGroup, londonps, londonmayor)
 #' ## This complains about different classes
+#' \dontrun{
 #' compare_dfs(~ageGroup + ethnicity, londonps, londonmayor)
+#' }
 #' londonmayor$ethnicity <- factor(londonmayor$ethnicity)
 #' compare_dfs(~ageGroup + ethnicity, londonps, londonmayor)
+#'
+#' @export
 compare_dfs <- function(formula,
                         df1,
                         df2) {
 
     ## Does formula have class formula?
     if(class(formula) != "formula") {
-        formula <- as.formula(formula)
+        formula <- stats::as.formula(formula)
     }
 
     ## What about the data frames?

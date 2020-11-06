@@ -4,7 +4,19 @@
 \alias{hrr}
 \title{Estimate hierarchical related regression model}
 \usage{
-hrr(formula, data, ps, result)
+hrr(
+  formula,
+  data,
+  ps,
+  result,
+  areavar,
+  testing = FALSE,
+  adjust = FALSE,
+  dirichlet = FALSE,
+  adapt_delta = 0.9,
+  max_treedepth = 11,
+  ...
+)
 }
 \arguments{
 \item{formula}{a formula object, or something that can be coerced to a formula object}
@@ -16,10 +28,25 @@ hrr(formula, data, ps, result)
 \item{result}{data frame containing the results; must contain column names equal to levels of the dependent variable in \code{formula}}
 
 \item{areavar}{a character containing the name of the variable giving the area}
+
+\item{testing}{if testing is set to TRUE, brms will use the prior only, no data}
+
+\item{adjust}{Can aggregate predictions from individual evidence be adjusted?}
+
+\item{dirichlet}{Use Dirichlet-Multinomial rather than multinomial}
+
+\item{adapt_delta}{adapt_delta parameter}
+
+\item{max_treedepth}{max_treedepth parameter}
+
+\item{...}{additional parameters passed to cmdstanr}
 }
 \value{
 returns TRUE or reports an error
 }
 \description{
 Estimate hierarchical related regression model
+}
+\examples{
+
 }
