@@ -61,12 +61,20 @@ y <- res %>%
 
 plot.df <- merge(y, yhat,
                  by = c("area", "outcome"),
-                 all = TRUE)
+                 all = TRUE) %>%
+    dplyr::mutate(col = ifelse((q5 > known_share | q95 < known_share),
+                        "red",
+                        "black"))
 
-ggplot(plot.df, aes(x = known_share, y = mean_share, ymin = q5, ymax = q95)) +
-    geom_abline(slope = 1, intercept = 0) + 
+ggplot(plot.df, aes(x = known_share, y = mean_share,
+                    ymin = q5, ymax = q95,
+                    colour = col)) +
+    geom_abline(slope = 1, intercept = 0) +
+    scale_colour_identity(guide = FALSE) + 
     geom_pointrange()
 
+### What about group support?
+yhat <- group_support(test)
 ### saveRDS(test, file = "../inst/extdata/toy_run.rds")
 
 ## opt_test <- hrr(vi ~ (1|area) + (1|cat1) + (1|cat2) + (1|cat3) + 
