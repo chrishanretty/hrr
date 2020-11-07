@@ -27,8 +27,8 @@ area_support <- function(object) {
     area_counts <- area_counts %>%
         dplyr::group_by(area, outcome) %>%
         dplyr::summarize(mean_share = mean(value),
-                         q5 = quantile(value, 0.05),
-                         q95 = quantile(value, 0.95),
+                         q5 = stats::quantile(value, 0.05),
+                         q95 = stats::quantile(value, 0.95),
                          .groups = "drop")
 
 ### Insert the labels back in

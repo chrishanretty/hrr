@@ -33,8 +33,8 @@ group_support <- function(object) {
         dplyr::mutate(share = value / sum(value)) %>%
         dplyr::group_by(var, var_level, outcome) %>% 
         dplyr::summarize(mean_share = mean(share),
-                         q5 = quantile(share, 0.05),
-                         q95 = quantile(share, 0.95),
+                         q5 = stats::quantile(share, 0.05),
+                         q95 = stats::quantile(share, 0.95),
                          .groups = "drop")
 
 ### Now give these things names

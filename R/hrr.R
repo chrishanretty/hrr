@@ -119,7 +119,7 @@ hrr <- function(formula, data, ps, result, areavar,
 
 
 ### Check whether these data frames are okay to use
-    test <- hrr::compare_dfs(stats::update(formula, 1 ~ .), data, ps)
+    test <- compare_dfs(stats::update(formula, 1 ~ .), data, ps)
 
     ### Check priors
     my_dots <- dots(...)
@@ -145,16 +145,16 @@ hrr <- function(formula, data, ps, result, areavar,
                                  threads = brms::threading(my_dots[["threads_per_chain"]]))
 
     
-    addons <- hrr:::hrr_code_func(formula = formula,
-                                  code = prelim_code,
-                                  data = data,
-                                  ps = ps,
-                                  results = result,
-                                  cats = cats,
-                                  areavar = areavar,
-                                  depvar = depvar,
-                                  adjust = adjust,
-                                  dirichlet = dirichlet)
+    addons <- hrr_code_func(formula = formula,
+                            code = prelim_code,
+                            data = data,
+                            ps = ps,
+                            results = result,
+                            cats = cats,
+                            areavar = areavar,
+                            depvar = depvar,
+                            adjust = adjust,
+                            dirichlet = dirichlet)
 
 ### Got to remove some stuff from my dots
     p <- my_dots[["prior"]]
