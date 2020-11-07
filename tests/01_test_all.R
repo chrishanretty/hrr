@@ -1,8 +1,8 @@
-## library(devtools)
-## build()
-## load_all()
+library(devtools)
+build()
+load_all()
 
-library(hrr)
+### library(hrr)
 data("toydata")
 data("toyps")
 
@@ -51,6 +51,21 @@ test <- hrr(vi ~ (1|area) + (1|cat1) + (1|cat2) + (1|cat3) +
     testing = FALSE,
     algorithm = "meanfield",
     dirichlet = TRUE)
+
+### Do the area levels of support match the recovered levels of support?
+yhat <- area_support(test)
+y <- res %>%
+    tidyr::pivot_longer(cols = -area, names_to = "outcome") %>%
+    dplyr::group_by(area) %>%
+    dplyr::mutate(known_share = value / sum(value))
+
+plot.df <- merge(y, yhat,
+                 by = c("area", "outcome"),
+                 all = TRUE)
+
+ggplot(plot.df, aes(x = known_share, y = mean_share, ymin = q5, ymax = q95)) +
+    geom_abline(slope = 1, intercept = 0) + 
+    geom_pointrange()
 
 ### saveRDS(test, file = "../inst/extdata/toy_run.rds")
 

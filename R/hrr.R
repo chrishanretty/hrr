@@ -188,7 +188,8 @@ hrr <- function(formula, data, ps, result, areavar,
                                                               grainsize = grainsize))
         retval <- list(code = code,
                        data = data,
-                       prior = p)
+                       prior = p,
+                       addons = addons)
     } else { 
         brms_args <- c(list(formula = formula,
                             data = data,
@@ -206,11 +207,50 @@ hrr <- function(formula, data, ps, result, areavar,
                 brms_args[["threads"]] <- NULL
             }
         }
+
+### What pars do we need?
+        ## r_{nvars}_mu{cats}_1
+        ## aggmu
+        ## adj (if adjust)
+        ## prec (if dirichlet)
+        ## ps_J_{nvars}_counts
+        ## b_mu{cats}_Intercept
+        
+### we can get this from the second entry in the tparameters block
+        tpars_block <- lapply(addons, function(x)x$block)
+        tpars_block <- which(unlist(tpars_block) == "tparameters")[2]
+        tpars_block <- addons[[tpars_block]]$scode
+
+        rpars <- stringr::str_extract_all(tpars_block,
+                                          pattern = "(r_[^,]*)")[[1]]
+        bpars <- stringr::str_extract_all(tpars_block,
+                                          pattern = "(b_[^,]*)")[[1]]
+        intpars <- paste0(bpars, "_Intercept")
+
+        nvars <- sub("r_", "", rpars)
+        nvars <- sub("_.*", "", nvars)
+        nvars <- as.numeric(nvars)
+        count_vars <- glue::glue("ps_J_{nvars}_counts")
+
+        my_save_pars <- c(rpars, bpars, intpars,
+                       count_vars,
+                       "aggmu")
+        if (adjust) my_save_pars <- c(my_save_pars, "adj")
+        if (dirichlet) my_save_pars <- c(my_save_pars, "prec")
+
+        brms_args[["save_pars"]] <- save_pars(group = FALSE,
+                                              manual = my_save_pars)
         
 ### Execute the call
         retval <- do.call(brms::brm,
                           args = brms_args)
+
+### Add on hrr specific elements
+        retval$areavar <- areavar
+        class(retval) <- c("hrrfit", class(retval))
+        
     }
+    
     return(retval)
 
 }
@@ -241,7 +281,8 @@ hrr_code_func <- function(formula, code, data, ps, results,
     
     retval +
         add_tpars_code(code, adjust) +
-        add_model_code(code, adjust, dirichlet, data, results)
+        add_model_code(code, adjust, dirichlet, data, results) +
+        add_genquant_code(code, formula, data, adjust, dirichlet)
 }
 
 dm_func <- function() {
@@ -631,6 +672,7 @@ autoprior <- function(formula, data) {
     cont_vars <- brms::get_prior(formula, data)$coef
     cont_vars <- unique(cont_vars[cont_vars != ""])
     cont_vars <- unique(cont_vars[cont_vars != "Intercept"])
+    
 ### "Continuous" variables
     for (d in dpars) {
         if (exists("priors")) {
@@ -677,3 +719,106 @@ autoprior <- function(formula, data) {
     }
     priors
 }
+
+add_genquant_code <- function(code,
+                              formula,
+                              data,
+                              adjust,
+                              dirichlet) {
+    ## Declarations
+    ## Big ps count objects
+    new_code <- "
+  int psw_counts[ps_N, ncat];
+
+"
+### Get the number of groups considered
+    tmpcode <- brms::make_stancode(formula,
+                                   data = data,
+                                   family = "categorical")
+    grp_indicators <- grep("int<lower=1> J_",
+                           stringr::str_split(tmpcode, pattern = "\n")[[1]],
+                           value = TRUE)
+    nvars <- unlist(stringr::str_extract_all(grp_indicators, "J_([0-9]+)"))
+    nvars <- as.numeric(sub("J_", "", nvars))
+    
+    ## Now objects for all the cats.
+    ## Need to get the right number here
+    new_code <- stringr::str_c(new_code,
+                           stringr::str_c(glue::glue("
+      int ps_J_<<nvars>>_counts[N_<<nvars>>, ncat];
+", .open = "<<", .close = ">>"), collapse = "\n"))
+
+### Initialize the psw+counts
+    new_code <- stringr::str_c(new_code,
+                   "
+  for (p in 1:ps_N) {
+    for (k in 1:ncat) {
+      psw_counts[p, k] = 0;
+    }
+  }
+", collapse = "\n")
+    
+    ### Initialize each
+    new_code <- stringr::str_c(new_code,
+                   stringr::str_c(glue::glue("
+  for (p in 1:ps_N) {
+    for (k in 1:ncat) {
+      ps_J_<<nvars>>_counts[ps_J_<<nvars>>[p],k] = 0;
+    }
+  }
+
+", .open = "<<", .close = ">>"), collapse = "\n"), collapse = "\n")
+
+    tpars_code <- add_tpars_code(code, adjust)[[2]]$scode
+    tpars_code <- stringr::str_replace(tpars_code,
+                                       "nAreas",
+                                       "ps_N")
+    
+    tpars_code <- stringr::str_replace(tpars_code,
+                                       stringr::fixed("aggmu[i] = "),
+                                       "row_vector [ncat] tmp = ")
+    
+    tpars_code <- stringr::str_replace(tpars_code,
+                                       stringr::fixed("areastart[i], areastop[i]"),
+                                       "i, i")
+    
+    if (adjust) {
+        tpars_code <- stringr::str_replace(tpars_code,
+                                           stringr::fixed("}"),
+                                           "
+psw_counts[i] = multinomial_rng(adj + to_vector(tmp), ps_counts[i]);
+}")
+    } else {
+        tpars_code <- stringr::str_replace(tpars_code,
+                                           stringr::fixed("}"),
+                                           "
+psw_counts[i] = multinomial_rng(to_vector(tmp), ps_counts[i]);
+}
+")
+    }
+    
+
+### Add this on
+    new_code <- stringr::str_c(new_code,
+                           tpars_code,
+                           collapse = "\n")
+    
+### Then for each
+
+    new_code <- stringr::str_c(new_code,
+                           stringr::str_c(glue::glue("
+  for (p in 1:ps_N) {
+    for (k in 1:ncat) {
+      ps_J_<<nvars>>_counts[ps_J_<<nvars>>[p],k] = ps_J_<<nvars>>_counts[ps_J_<<nvars>>[p],k] +
+                               psw_counts[p, k];
+    }
+  }
+
+", .open = "<<", .close = ">>"), collapse = "\n"), collapse = "\n")
+
+### Return as a stanvar
+    brms::stanvar(scode = new_code,
+                  block = "genquant")
+
+}
+
