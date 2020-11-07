@@ -769,7 +769,13 @@ add_genquant_code <- function(code,
 
 ", .open = "<<", .close = ">>"), collapse = "\n"), collapse = "\n")
 
-    tpars_code <- add_tpars_code(code, adjust)[[2]]$scode
+    tpars_code <- add_tpars_code(code, adjust)
+    if (adjust) {
+        tpars_code <- tpars_code[[3]]$scode
+    } else {
+        tpars_code <- tpars_code[[2]]$scode
+    }
+    
     tpars_code <- stringr::str_replace(tpars_code,
                                        "nAreas",
                                        "ps_N")
@@ -782,21 +788,13 @@ add_genquant_code <- function(code,
                                        stringr::fixed("areastart[i], areastop[i]"),
                                        "i, i")
     
-    if (adjust) {
-        tpars_code <- stringr::str_replace(tpars_code,
-                                           stringr::fixed("}"),
-                                           "
-psw_counts[i] = multinomial_rng(adj + to_vector(tmp), ps_counts[i]);
-}")
-    } else {
-        tpars_code <- stringr::str_replace(tpars_code,
+    tpars_code <- stringr::str_replace(tpars_code,
                                            stringr::fixed("}"),
                                            "
 psw_counts[i] = multinomial_rng(to_vector(tmp), ps_counts[i]);
 }
 ")
-    }
-    
+   
 
 ### Add this on
     new_code <- stringr::str_c(new_code,

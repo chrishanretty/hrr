@@ -1,17 +1,27 @@
 #' Produce a tidy data frame with estimates of group support from a fit
 #'
 #' @param object an object of class hrrfit
-#'
+#' 
+#' @importFrom abind abind
 #' @export
 group_support <- function(object) {
     if (!inherits(object, "hrrfit")) {
         stop("Object must be of class hrrfit")
     }
 ### Get the ps_count_variables out
-    nIter <- nrow(object$fit)
+    parmat <- as.array(object$fit)
+    ### If there are multiple chains, combine them into a single matrix
+    if (length(dim(object$fit)) > 2) {
+        parmat <- matrix(parmat,
+                         dim(parmat)[1] * dim(parmat)[2],
+                         dim(parmat)[3])
+        colnames(parmat) <- dimnames(object$fit)$parameters
+    }
+    
+    nIter <- nrow(parmat)
     grp_vars <- grep("ps_J_[0-9]+_counts",
-                    dimnames(object$fit)$parameters)
-    grp_counts <- as.matrix(object$fit)[, grp_vars]
+                    colnames(parmat))
+    grp_counts <- parmat[, grp_vars]
 
     grp_counts <- as.data.frame(grp_counts)
     grp_counts <- tidyr::gather(grp_counts) %>%

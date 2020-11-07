@@ -18,4 +18,6 @@ Depends:
 Imports: 
     stringr,
     glue,
-    magrittr
+    magrittr,
+    tidyr,
+    dplyr
