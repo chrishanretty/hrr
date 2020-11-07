@@ -75,6 +75,7 @@ ggplot(plot.df, aes(x = known_share, y = mean_share,
 
 ### What about group support?
 yhat <- group_support(test)
+
 ### saveRDS(test, file = "../inst/extdata/toy_run.rds")
 
 ## opt_test <- hrr(vi ~ (1|area) + (1|cat1) + (1|cat2) + (1|cat3) + 
