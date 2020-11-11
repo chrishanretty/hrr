@@ -55,6 +55,9 @@ group_support <- function(object) {
 ### (2) Work out the variable levels
     level_names <- sapply(unique(var_names), function(v) {
         levs <- levels(object$data[,v])
+        if (is.null(levs)) {
+            levs <- levels(factor(object$data[,v]))
+        }
         data.frame(var = v,
                    var_level = 1:length(levs),
                    level_name = levs)

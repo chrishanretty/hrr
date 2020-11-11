@@ -13,6 +13,7 @@ hrr(
   testing = FALSE,
   adjust = FALSE,
   dirichlet = FALSE,
+  mrp_only = FALSE,
   adapt_delta = 0.9,
   max_treedepth = 11,
   ...
@@ -34,6 +35,8 @@ hrr(
 \item{adjust}{Can aggregate predictions from individual evidence be adjusted?}
 
 \item{dirichlet}{Use Dirichlet-Multinomial rather than multinomial}
+
+\item{mrp_only}{Ignore the aggregate element}
 
 \item{adapt_delta}{adapt_delta parameter}
 

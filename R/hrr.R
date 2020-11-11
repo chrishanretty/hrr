@@ -8,6 +8,7 @@
 #' @param testing if testing is set to TRUE, brms will use the prior only, no data
 #' @param adjust Can aggregate predictions from individual evidence be adjusted?
 #' @param dirichlet Use Dirichlet-Multinomial rather than multinomial
+#' @param mrp_only Ignore the aggregate element
 #' @param adapt_delta adapt_delta parameter
 #' @param max_treedepth max_treedepth parameter
 #' @param ... additional parameters passed to cmdstanr
@@ -20,6 +21,7 @@ hrr <- function(formula, data, ps, result, areavar,
                 testing = FALSE,
                 adjust = FALSE,
                 dirichlet = FALSE,
+                mrp_only = FALSE,
                 adapt_delta = 0.9, max_treedepth = 11, ...) {
 
     ### Input class checking
@@ -154,7 +156,8 @@ hrr <- function(formula, data, ps, result, areavar,
                             areavar = areavar,
                             depvar = depvar,
                             adjust = adjust,
-                            dirichlet = dirichlet)
+                            dirichlet = dirichlet,
+                            mrp_only = mrp_only)
 
 ### Got to remove some stuff from my dots
     p <- my_dots[["prior"]]
@@ -257,7 +260,7 @@ hrr <- function(formula, data, ps, result, areavar,
 
 
 hrr_code_func <- function(formula, code, data, ps, results,
-                          cats, areavar, depvar, adjust, dirichlet) {
+                          cats, areavar, depvar, adjust, dirichlet, mrp_only) {
 ### Purpose: pull together all the stanvars
 ### Input: code and data
 ### Output: stanvars
@@ -279,10 +282,18 @@ hrr_code_func <- function(formula, code, data, ps, results,
             add_pars_code(code, adjust, dirichlet)
     }
     
-    retval +
-        add_tpars_code(code, adjust) +
-        add_model_code(code, adjust, dirichlet, data, results) +
+    retval <- retval +
+        add_tpars_code(code, adjust)
+
+    if (!mrp_only) {
+        retval <- retval +
+            add_model_code(code, adjust, dirichlet, data, results)
+    }
+    
+    retval <- retval + 
         add_genquant_code(code, formula, data, adjust, dirichlet)
+    
+    retval
 }
 
 dm_func <- function() {

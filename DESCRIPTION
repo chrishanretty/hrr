@@ -20,4 +20,5 @@ Imports:
     glue,
     magrittr,
     tidyr,
-    dplyr
+    dplyr,
+    abind
