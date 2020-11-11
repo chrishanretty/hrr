@@ -55,6 +55,8 @@ fit2 <- hrr(f,
             adjust = FALSE,
             dirichlet = TRUE,
             testing = FALSE,
+            iter = 800,
+            warmup = 400,
             algorithm = "sampling")
 
 g2 <- group_support(fit2)

@@ -14,6 +14,7 @@ hrr(
   adjust = FALSE,
   dirichlet = FALSE,
   mrp_only = FALSE,
+  weights = NULL,
   adapt_delta = 0.9,
   max_treedepth = 11,
   ...
@@ -28,7 +29,7 @@ hrr(
 
 \item{result}{data frame containing the results; must contain column names equal to levels of the dependent variable in \code{formula}}
 
-\item{areavar}{a character containing the name of the variable giving the area}
+\item{areavar}{a character variable containing the name of the variable giving the area}
 
 \item{testing}{if testing is set to TRUE, brms will use the prior only, no data}
 
@@ -37,6 +38,8 @@ hrr(
 \item{dirichlet}{Use Dirichlet-Multinomial rather than multinomial}
 
 \item{mrp_only}{Ignore the aggregate element}
+
+\item{weights}{a character variable containing the name of the weighting variable}
 
 \item{adapt_delta}{adapt_delta parameter}
 

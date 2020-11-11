@@ -4,11 +4,12 @@
 #' @param data data frame containing the individual level data
 #' @param ps data frame containing the post-stratification data; must contain variable `count`
 #' @param result data frame containing the results; must contain column names equal to levels of the dependent variable in `formula`
-#' @param areavar a character containing the name of the variable giving the area
+#' @param areavar a character variable containing the name of the variable giving the area
 #' @param testing if testing is set to TRUE, brms will use the prior only, no data
 #' @param adjust Can aggregate predictions from individual evidence be adjusted?
 #' @param dirichlet Use Dirichlet-Multinomial rather than multinomial
 #' @param mrp_only Ignore the aggregate element
+#' @param weights a character variable containing the name of the weighting variable
 #' @param adapt_delta adapt_delta parameter
 #' @param max_treedepth max_treedepth parameter
 #' @param ... additional parameters passed to cmdstanr
@@ -22,6 +23,7 @@ hrr <- function(formula, data, ps, result, areavar,
                 adjust = FALSE,
                 dirichlet = FALSE,
                 mrp_only = FALSE,
+                weights = NULL,
                 adapt_delta = 0.9, max_treedepth = 11, ...) {
 
     ### Input class checking
@@ -119,7 +121,19 @@ hrr <- function(formula, data, ps, result, areavar,
         stop("results data frame has negative counts")
     }
 
-
+### Check the weighting variable is present and all non-negative
+    if (!is.null(weights)) {
+        if (!is.element(weights, names(data))) {
+            stop("weights variable not present in data")
+        }
+        if (!is.numeric(data[,weights])) {
+            stop("weights variable not numeric")
+        }
+        if (any(data[,weights] < 0)) {
+            stop("weights variable has negative entries")
+        }
+    }
+    
 ### Check whether these data frames are okay to use
     test <- compare_dfs(stats::update(formula, 1 ~ .), data, ps)
 
@@ -157,8 +171,12 @@ hrr <- function(formula, data, ps, result, areavar,
                             depvar = depvar,
                             adjust = adjust,
                             dirichlet = dirichlet,
-                            mrp_only = mrp_only)
+                            mrp_only = mrp_only,
+                            weights = weights)
 
+### Deal with weights
+    new_formula <- add_weights_to_formula(formula, weights)
+    
 ### Got to remove some stuff from my dots
     p <- my_dots[["prior"]]
     my_dots[["prior"]] <- NULL
@@ -175,14 +193,14 @@ hrr <- function(formula, data, ps, result, areavar,
     data <- data[sample(1:nrow(data), size = nrow(data), replace = FALSE),]
 
     if (testing) {
-        code <- brms::make_stancode(formula = formula,
+        code <- brms::make_stancode(formula = new_formula,
                                     data = data,
                                     family = "categorical",
                                     stanvars = addons,
                                     prior = p,
                                     threads = brms::threading(thread_count,
                                                               grainsize = grainsize))
-        data <- brms::make_standata(formula = formula,
+        data <- brms::make_standata(formula = new_formula,
                                     data = data,
                                     family = "categorical",
                                     stanvars = addons,
@@ -194,7 +212,7 @@ hrr <- function(formula, data, ps, result, areavar,
                        prior = p,
                        addons = addons)
     } else { 
-        brms_args <- c(list(formula = formula,
+        brms_args <- c(list(formula = new_formula,
                             data = data,
                             family = "categorical",
                             prior = p,
@@ -210,6 +228,7 @@ hrr <- function(formula, data, ps, result, areavar,
         if ("algorithm" %in% names(my_dots)) {
             if (my_dots[["algorithm"]] != "sampling") {
                 brms_args[["threads"]] <- NULL
+                brms_args[["control"]] <- NULL
             }
         }
 
@@ -262,7 +281,7 @@ hrr <- function(formula, data, ps, result, areavar,
 
 
 hrr_code_func <- function(formula, code, data, ps, results,
-                          cats, areavar, depvar, adjust, dirichlet, mrp_only) {
+                          cats, areavar, depvar, adjust, dirichlet, mrp_only, weights) {
 ### Purpose: pull together all the stanvars
 ### Input: code and data
 ### Output: stanvars
@@ -833,3 +852,16 @@ psw_counts[i] = multinomial_rng(to_vector(tmp), ps_counts[i]);
 
 }
 
+
+add_weights_to_formula <- function(formula, weights) {
+
+    if (is.null(weights)) {
+        return(formula)
+    } else {
+        f <- as.character(formula)
+        f[2] <- paste0(f[2], "|weights(", weights, ")")
+        return(brms:::bf(paste(f[-1], collapse = "~")))
+    }
+}
+
+    
