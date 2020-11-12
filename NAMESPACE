@@ -2,6 +2,7 @@
 
 export("%>%")
 export(area_support)
+export(autoprior)
 export(compare_dfs)
 export(group_support)
 export(hrr)

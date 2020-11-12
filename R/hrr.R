@@ -86,6 +86,11 @@ hrr <- function(formula, data, ps, result, areavar,
     }
 
     cats <- levels(data[,depvar])
+    if (length(cats) == 2) {
+        family <- "bernoulli"
+    } else {
+        family <- "categorical"
+    }
     
 ### Check whether the categories have any spaces in them
     if (any(grepl(" ", cats))) {
@@ -157,7 +162,7 @@ hrr <- function(formula, data, ps, result, areavar,
 ### Generate some preliminary code
     prelim_code <- brms::make_stancode(formula,
                                  data = data,
-                                 family = "categorical",
+                                 family = family,
                                  threads = brms::threading(my_dots[["threads_per_chain"]]))
 
     
@@ -195,14 +200,14 @@ hrr <- function(formula, data, ps, result, areavar,
     if (testing) {
         code <- brms::make_stancode(formula = new_formula,
                                     data = data,
-                                    family = "categorical",
+                                    family = family,
                                     stanvars = addons,
                                     prior = p,
                                     threads = brms::threading(thread_count,
                                                               grainsize = grainsize))
         data <- brms::make_standata(formula = new_formula,
                                     data = data,
-                                    family = "categorical",
+                                    family = family,
                                     stanvars = addons,
                                     prior = p,
                                     threads = brms::threading(thread_count,
@@ -214,7 +219,7 @@ hrr <- function(formula, data, ps, result, areavar,
     } else { 
         brms_args <- c(list(formula = new_formula,
                             data = data,
-                            family = "categorical",
+                            family = family,
                             prior = p,
                             control = list(adapt_delta = adapt_delta,
                                            max_treedepth = max_treedepth),
@@ -304,7 +309,7 @@ hrr_code_func <- function(formula, code, data, ps, results,
     }
     
     retval <- retval +
-        add_tpars_code(code, adjust)
+        add_tpars_code(code, adjust, dirichlet)
 
     if (!mrp_only) {
         retval <- retval +
@@ -331,61 +336,6 @@ dm_func <- function() {
                   
 }
 
-add_ps_data_code <- function(code) {
-### Purpose: produce a stanvar object with data declarations for the post-strat. data
-### Input: stan code
-### Output: stanvar object
-    ## require(stringr)
-    ## require(brms)
-### We need to get the existing data block
-    data_block <- stringr::str_extract(code,
-                              pattern = stringr::regex("data \\{.*\\}\ntransformed data \\{",
-                                              multiline = TRUE,
-                                              dotall = TRUE))
-
-### Keep those lines which begin with X_, Z_, or J_
-    data_block <- stringr::str_extract_all(data_block,
-                              pattern = stringr::regex(".*(X_|Z_|J_).*",
-                                              multiline = FALSE))[[1]]
-
-### Replace these entries with ps_X_, etc.,
-    data_block <- stringr::str_replace(data_block,
-                              pattern = "(X_|Z_|J_)",
-                              replacement = "ps_\\1")
-
-### Replace references to N with ps_N
-    data_block <- stringr::str_replace(data_block,
-                              pattern = stringr::fixed("[N]"),
-                              replacement = "[ps_N]")
-    
-    data_block <- stringr::str_replace(data_block,
-                              pattern = stringr::fixed("[N, "),
-                              replacement = "[ps_N, ")
-
-### Add on the other things we need in this block;
-### ps_N, nAreas, areastart, areastop
-    top_block = c("
-   int ps_N;
-   int nAreas;
-   int areastart[nAreas];
-   int areastop[nAreas];
-   int<lower=1> ps_counts[ps_N];
-   int aggy[nAreas, ncat];
-")
-
-### Combine and return
-    data_block <- c(top_block, data_block)
-    data_block <- paste0(data_block, collapse = "\n")
-    foo <- 1
-    brms::stanvar(x = foo,
-            scode = data_block,
-            block = "data",
-            position = "start")
-
-}
-
-
-
 add_ps_tdata_code <- function(cats) {
 ### Purpose: add data transformations to the transformed data block
 ### Input: list of output levels
@@ -395,16 +345,36 @@ add_ps_tdata_code <- function(cats) {
     if (any(grepl(" ", cats))) {
         stop("Don't yet know how to handle outcome levels with whitespace")
     }
+
+    if(length(cats) > 1) {
+        family <- "categorical"
+    } else {
+        family <- "bernoulli"
+    }
     
-    pscode_tdata_top <- glue::glue('
+    if (family == "categorical") { 
+        pscode_tdata_top <- glue::glue('
   matrix[ps_N, K_mu<<cats>> - 1] ps_Xc_mu<<cats>>;  // 
 ', .open = "<<", .close = ">>")
     
-pscode_tdata_bottom <- glue::glue('
+        pscode_tdata_bottom <- glue::glue('
   for (i in 2:K_mu<<cats>>) {
     ps_Xc_mu<<cats>>[, i - 1] = ps_X_mu<<cats>>[, i] - means_X_mu<<cats>>[i - 1];
   } 
 ', .open = "<<", .close = ">>")
+
+    } else {
+        pscode_tdata_top <- '
+  matrix[ps_N, K - 1] ps_Xc;  // 
+'
+        
+        pscode_tdata_bottom <- '
+  for (i in 2:K) {
+    ps_Xc[, i - 1] = ps_X[, i] - means_X[i - 1];
+  } 
+'
+        
+    }
 
     brms::stanvar(pscode_tdata_top,
             scode = pscode_tdata_top,
@@ -417,93 +387,187 @@ pscode_tdata_bottom <- glue::glue('
 
 }
 
-pll_to_pred_prob<- function(code, adjust) {
-### Purpose: create a new stan function from the partial_log_lik function
-### For reference, it's declared something like this
-  ##     real partial_log_lik(int[] seq, int start, int end, int ncat, int[] Y, matrix Xc_mugreen, vector b_mugreen, real Intercept_mugreen, matrix Xc_mublue, vector b_mublue, real Intercept_mublue, int[] J_1, vector Z_1_mugreen_1, vector r_1_mugreen_1, int[] J_2, vector Z_2_mugreen_1, vector r_2_mugreen_1, int[] J_3, vector Z_3_mugreen_1, vector r_3_mugreen_1, int[] J_4, vector Z_4_mugreen_1, vector r_4_mugreen_1, int[] J_5, vector Z_5_mublue_1, vector r_5_mublue_1, int[] J_6, vector Z_6_mublue_1, vector r_6_mublue_1, int[] J_7, vector Z_7_mublue_1, vector r_7_mublue_1, int[] J_8, vector Z_8_mublue_1, vector r_8_mublue_1) {
-
+pll_to_pred_prob <- function(code, adjust) {
 ### Input: preliminary code
 ### output: stanvar
+    ### This might not work with weights
     ## require(stringr)
     ## require(brms)
     ## Get the function code
+    if (grepl("categorical_logit_lpmf", code)) {
+        family <- "categorical"    
+    } else {
+        family <- "bernoulli"
+    }
+        
     code <- stringr::str_extract(code,
-                pattern = stringr::regex("real partial_log_lik.*return ptarget;\\s+\\}",
-                                dotall = TRUE,
-                                multiline = TRUE))
+                                 pattern = stringr::regex("real partial_log_lik.*return ptarget;\\s+\\}",
+                                                          dotall = TRUE,
+                                                          multiline = TRUE))
+    
 ### Amend the function declaration: name and return type
     if (adjust) {
+        if (family == "categorical") { 
             code <- stringr::str_replace(code,
-                        stringr::fixed("real partial_log_lik(int[] seq, "),
-                        "vector pred_prob(vector adj, ")
-    } else { 
-        code <- stringr::str_replace(code,
-                                     stringr::fixed("real partial_log_lik(int[] seq, "),
-                                     "vector pred_prob(")
+                                         stringr::fixed("real partial_log_lik(int[] seq, "),
+                                         "vector pred_prob(vector adj, ")
+        } else {
+            code <- stringr::str_replace(code,
+                                         stringr::fixed("real partial_log_lik(int[] seq, "),
+                                         "real pred_prob(real adj, ")
+        }
+        
+    } else {
+        if (family == "categorical") { 
+            
+            code <- stringr::str_replace(code,
+                                         stringr::fixed("real partial_log_lik(int[] seq, "),
+                                         "vector pred_prob(")
+        } else {
+            code <- stringr::str_replace(code,
+                                         stringr::fixed("real partial_log_lik(int[] seq, "),
+                                         "real pred_prob(")
+        }
+        
     }
+        
 ### Amend the function declaration: additional argument
-    code <- stringr::str_replace(code,
-                        "vector pred_prob(.*?)\\) \\{",
-                        "vector pred_prob\\1, int[] psweights) {")
-    
-### Replace the current declaration of the return variable
-    code <- stringr::str_replace(code,
-                        "real ptarget = 0;",
-                        "vector[ncat] pp = rep_vector(0, ncat);")
-
-### Amend the calculation
-    if (adjust) {
+    if (family == "categorical") { 
         code <- stringr::str_replace(code,
-                        stringr::fixed("ptarget += categorical_logit_lpmf(Y[nn] | mu[n]);"),
-                        "pp += softmax(adj + mu[n]) * psweights[nn];")
+                                     "vector pred_prob(.*?)\\) \\{",
+                                     "vector pred_prob\\1, int[] psweights) {")
     } else {
         code <- stringr::str_replace(code,
-                        stringr::fixed("ptarget += categorical_logit_lpmf(Y[nn] | mu[n]);"),
-                        "pp += softmax(mu[n]) * psweights[nn];")
+                                     "real pred_prob(.*?)\\) \\{",
+                                     "real pred_prob\\1, int[] psweights) {")
     }
+    
+### Replace the current declaration of the return variable
+    if (family == "categorical") { 
+        code <- stringr::str_replace(code,
+                                     "real ptarget = 0;",
+                                     "vector[ncat] pp = rep_vector(0, ncat);")
+    } else {
+        code <- stringr::str_replace(code,
+                                     "real ptarget = 0;",
+                                     "real pp = 0;")
+    }
+    
 
+### Amend the calculation
+    oldcode <- code
+    if (family == "categorical") { 
+        if (adjust) {
+            code <- stringr::str_replace(code,
+                                         stringr::fixed("ptarget += categorical_logit_lpmf(Y[nn] | mu[n]);"),
+                                         "pp += softmax(adj + mu[n]) * psweights[nn];")
+        } else {
+            code <- stringr::str_replace(code,
+                                         stringr::fixed("ptarget += categorical_logit_lpmf(Y[nn] | mu[n]);"),
+                                         "pp += softmax(mu[n]) * psweights[nn];")
+        }
+    } else {
+        if (adjust) {
+            code <- stringr::str_replace(code,
+                                         stringr::fixed("ptarget += bernoulli_logit_lpmf(Y[nn] | mu[n]);"),
+                                         "for (n in 1:N) {
+      int nn = n + start - 1;
+      pp += inv_logit(adj + mu[n] + Xc[start:end] * b) * psweights[nn];
+}")
+        } else {
+            code <- stringr::str_replace(code,
+                                         stringr::fixed("ptarget += bernoulli_logit_glm_lpmf(Y[start:end] | Xc[start:end], mu, b);"),
+                                         "for (n in 1:N) {
+      int nn = n + start - 1;
+      real mu0 = Xc[nn] * b;
+      real unweighted = inv_logit(mu[n] + mu0);
+      pp += unweighted * psweights[nn] / sum(psweights[start:end]);
+}")
+        }
+    }
+    
+    if (code == oldcode) {
+        stop("Terribly sorry, but some code we expected to find hasn't been found, and so can't be replaced")
+    }
+    
 ### Amend the return value
-    code <- stringr::str_replace(code,
-                        stringr::fixed("return ptarget;"),
-                        "return (pp / sum(pp));")
+    if (family == "categorical") { 
+        code <- stringr::str_replace(code,
+                                     stringr::fixed("return ptarget;"),
+                                     "return (pp / sum(pp));")
+    } else {
+        code <- stringr::str_replace(code,
+                                     stringr::fixed("return ptarget;"),
+                                     "return pp;")
+    }
 
     brms::stanvar(scode = code,
             block = "functions")
 } 
 
 add_pars_code <- function(code, adjust, dirichlet) {
+    if (grepl("categorical_logit_lpmf", code)) {
+        family <- "categorical"    
+    } else {
+        family <- "bernoulli"
+    }
     code <- ""
     if (adjust) {
         code <- "  vector [ncat-1] adj0; "
 
     }
     if (dirichlet) {
+        if (family == "categorical") { 
         code <- paste0(code, "
   real <lower=0>prec;
 ")
+        } else {
+        code <- paste0(code, "
+  real <lower=0>kappa;
+")
+        }
     }
+    
     code <- brms::stanvar(scode = code,
                           position = "start",
                           block = "parameters")
     return(code)
 }
 
-add_tpars_code <- function(code, adjust) {
+add_tpars_code <- function(code, adjust, dirichlet) {
 ### Purpose: add transformed parameters declaration
 ### Input: stan code
 ### Output: stanvar object
+    if (grepl("categorical_logit_lpmf", code)) {
+        family <- "categorical"    
+    } else {
+        family <- "bernoulli"
+    }
 
-    if (adjust) { 
-        top <- brms::stanvar(scode = "matrix[nAreas, ncat] aggmu;
-vector [ncat] adj; ",
+    if (family == "categorical") {
+        top <- brms::stanvar(scode = "matrix[nAreas, ncat] aggmu;",
                    block = "tparameters",
                    position = "start")
+        if (adjust) { 
+            top <- top +
+                brms::stanvar(scode = "vector [ncat] adj; ",
+                              block = "tparameters",
+                              position = "start")
+        }
     } else {
-        top <- brms::stanvar(scode = "matrix[nAreas, ncat] aggmu;",
+        top <- brms::stanvar(scode = "vector[nAreas] aggmu;",
                              block = "tparameters",
                              position = "start")
-        
+        if (adjust) {
+            top <- top +
+                brms::stanvar(scode = "real adj; ",
+                              block = "tparameters",
+                              position = "start")
         }
+        
+    }
+    
+
     old_func <- stringr::str_extract(code,
                             pattern = "reduce_sum\\(partial_log_lik.*")
 
@@ -523,6 +587,10 @@ vector [ncat] adj; ",
     new_func <- stringr::str_replace_all(new_func,
                                 stringr::fixed("Xc_"),
                                 "ps_Xc_")
+
+    new_func <- stringr::str_replace_all(new_func,
+                                stringr::fixed("Xc,"),
+                                "ps_Xc,")
     
     new_func <- stringr::str_replace_all(new_func,
                                 stringr::fixed("J_"),
@@ -533,9 +601,16 @@ vector [ncat] adj; ",
                                 "ps_Z_")
 
 ### Amend the end by adding psweights arg);
-    new_func <- stringr::str_replace(new_func,
+### only transpose if we need to
+    if (family == "categorical") { 
+        new_func <- stringr::str_replace(new_func,
+                                         stringr::fixed(");"),
+                                         ", ps_counts)';")
+    } else {
+        new_func <- stringr::str_replace(new_func,
                         stringr::fixed(");"),
-                        ", ps_counts)';")
+                        ", ps_counts);")
+    }
     
     bottom <- paste0("
     for (i in 1:nAreas) {
@@ -548,11 +623,32 @@ vector [ncat] adj; ",
                       block = "tparameters",
                       position = "end")
     if (adjust) {
+        if (family == "categorical") { 
         bottom <- 
             brms::stanvar(scode = "adj = append_row(0, adj0); ",
                           block = "tparameters",
                           position = "end") +
             bottom
+        } else {
+            bottom <- 
+                brms::stanvar(scode = "adj = adj0; ",
+                              block = "tparameters",
+                              position = "end") +
+                bottom
+        }
+        
+    }
+    
+    if (family == "bernoulli" & dirichlet) {
+        top <- brms::stanvar(scode = "real prec;",
+                             block = "tparameters",
+                             position = "start") +
+            top
+        bottom <- brms::stanvar(scode = "prec = 1 / kappa;",
+                                block = "tparameters",
+                                position = "end") +
+            bottom
+        
     }
     
 
@@ -564,23 +660,55 @@ add_model_code <- function(code, adjust, dirichlet, data, results) {
 ### Purpose: add a sampling statement
 ### Input: preliminary code
 ### Output: stanvar
-    if (dirichlet) {
-        scode <- "
+    if (grepl("categorical_logit_lpmf", code)) {
+        family <- "categorical"    
+    } else {
+        family <- "bernoulli"
+    }
+
+    if (family == "categorical") { 
+        if (dirichlet) {
+            scode <- "
   if (!prior_only) {
    for (i in 1:nAreas) { 
       aggy[i] ~ dirichlet_multinomial(prec * to_vector(aggmu[i]));
    }
   }
 "
-    } else { 
-        scode <- "
+        } else { 
+            scode <- "
   if (!prior_only) {
    for (i in 1:nAreas) { 
       aggy[i] ~ multinomial(to_vector(aggmu[i]));
    }
   }
 "
+        }
+    } else {
+            if (dirichlet) {
+            scode <- "
+  if (!prior_only) {
+   for (i in 1:nAreas) {
+      real share;
+      // multiplying by 1.0 nec to promote to real from int
+      share = (1.0 * aggy[i, 2]) / (1.0 * (aggy[i,1] + aggy[i, 2]));
+      share ~ beta_proportion(aggmu[i], prec);
+   }
+  }
+"
+        } else { 
+            scode <- "
+  if (!prior_only) {
+   for (i in 1:nAreas) {
+      int totarea = (aggy[i, 1] + aggy[i, 2]);
+      aggy[i, 2] ~ binomial(totarea, aggmu[i]);
+   }
+  }
+"
+        }
     }
+    
+    
     
 
     if (adjust) {
@@ -590,6 +718,7 @@ add_model_code <- function(code, adjust, dirichlet, data, results) {
     }
             
     if (dirichlet) {
+        if (family == "categorical") { 
         ## The median on the normal scale should equal nrow(dat) / nAreas
         ## and we should assign zero probability to a pseudo count greater than the observed total in any area
         log_m <- log(nrow(data) / nrow(results))
@@ -610,7 +739,18 @@ log_m,
 log_sd,
 ");",
 collapse = "\n")                        
+        } else { ## binomial
+            shares <- results[,3] / rowSums(results[,-1])
+            share_sd <- sd(shares)
+                    scode <- paste0(scode, "
+// have a sensible default prior for the precision parameter here
+   target += normal_lpdf(kappa | 0, ",
+share_sd,
+");",
+collapse = "\n")                        
+        }
     }
+    
     
     retval <- brms::stanvar(scode = scode,
                             block = "model")
@@ -621,11 +761,17 @@ hrr_data_func <- function(formula, data, ps, results, cats, areavar, depvar) {
 ### Purpose: construct all the additional data as a stanvar
 ### Input: whole bunch of things
 ### Output: stanvar
+
+    if (length(cats) > 2) {
+        family <- "categorical"
+    } else {
+        family <- "bernoulli"
+    }
     
     ### Do I need to change the threading argument?
     prelim_data <- brms::make_standata(formula,
                           data,
-                          family = "categorical",
+                          family = family,
                           threads = brms::threading(4))
 
 ### Amend the ps data so that it includes the depvar
@@ -640,12 +786,13 @@ hrr_data_func <- function(formula, data, ps, results, cats, areavar, depvar) {
     
     ps_data <- brms::make_standata(formula,
                                    ps,
-                                   family = "categorical",
+                                   family = family,
                                    threads = brms::threading(4))
-
+    
 
 ### Retain, from ps_data, anything which begins with an X_, a Z_, or or a J_
-    new_ps_data <- ps_data[grep("X_|Z_|J_", names(ps_data))]
+    new_ps_data <- ps_data[c(grep("X_|Z_|J_", names(ps_data)),
+                             which(names(ps_data) == "X"))]
 ### Rename these variables
     names(new_ps_data) <- paste0("ps_", names(new_ps_data))
     new_ps_data$ps_N <- ps_data$N
@@ -673,13 +820,26 @@ hrr_data_func <- function(formula, data, ps, results, cats, areavar, depvar) {
                                       block = "data"))
     }
 
-### Combine with the other data
-    aggy <- as.matrix(results[,cats])
+    ### Need to add ncat if it's binomia;
+    if (family == "bernoulli") {
+        ncat <- 2
+        data_block <- c(data_block,
+                        brms::stanvar(ncat,
+                                      scode = "int ncat;",
+                                      block = "data"))
 
+    }
+    
+### Combine with the other data
+    
+    aggy <- as.matrix(results[,cats])
+    
     data_block <- c(data_block,
                     brms::stanvar(aggy,
-                            scode = "int aggy[nAreas, ncat];",
-                            block = "data"))
+                                  scode = "int aggy[nAreas, ncat];",
+                                  block = "data"))
+
+
     
 ### Get aggregate results out
 ### Make sure they follow the same order as the ps data
@@ -696,6 +856,11 @@ add_genquant_code <- function(code,
                               data,
                               adjust,
                               dirichlet) {
+    if (grepl("categorical_logit_lpmf", code)) {
+        family <- "categorical"    
+    } else {
+        family <- "bernoulli"
+    }
     ## Declarations
     ## Big ps count objects
     new_code <- "
@@ -740,31 +905,48 @@ add_genquant_code <- function(code,
 
 ", .open = "<<", .close = ">>"), collapse = "\n"), collapse = "\n")
 
-    tpars_code <- add_tpars_code(code, adjust)
-    if (adjust) {
-        tpars_code <- tpars_code[[3]]$scode
-    } else {
-        tpars_code <- tpars_code[[2]]$scode
-    }
+    tpars_code <- add_tpars_code(code, adjust, dirichlet)
+### Extract that part of the tpars_code which involves pred_probs
+    pos <- lapply(tpars_code, function(x)grepl("pred_prob", x$scode))
+    pos <- unlist(pos)
+    pos <- which(pos)
+    
+    tpars_code <- tpars_code[[pos]]$scode
     
     tpars_code <- stringr::str_replace(tpars_code,
                                        "nAreas",
                                        "ps_N")
+
+    if (family == "categorical") { 
+        tpars_code <- stringr::str_replace(tpars_code,
+                                           stringr::fixed("aggmu[i] = "),
+                                           "row_vector [ncat] tmp = ")
+    } else {
+        tpars_code <- stringr::str_replace(tpars_code,
+                                           stringr::fixed("aggmu[i] = "),
+                                           "real tmp = ")
+    }
     
-    tpars_code <- stringr::str_replace(tpars_code,
-                                       stringr::fixed("aggmu[i] = "),
-                                       "row_vector [ncat] tmp = ")
     
     tpars_code <- stringr::str_replace(tpars_code,
                                        stringr::fixed("areastart[i], areastop[i]"),
                                        "i, i")
-    
+
+    if (family == "categorical") { 
     tpars_code <- stringr::str_replace(tpars_code,
                                            stringr::fixed("}"),
                                            "
 psw_counts[i] = multinomial_rng(to_vector(tmp), ps_counts[i]);
 }
 ")
+    } else {
+            tpars_code <- stringr::str_replace(tpars_code,
+                                           stringr::fixed("}"),
+                                           "
+psw_counts[i, 2] = binomial_rng(ps_counts[i], tmp);
+}
+")
+        }
    
 
 ### Add this on

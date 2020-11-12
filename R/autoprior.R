@@ -14,6 +14,11 @@ autoprior <- function(formula, data) {
     stopifnot(length(cats) > 0)
     
     dpars <- paste0("mu", cats[-1])
+    ### We don't need dpars if we just have two outcomes
+    if (length(cats) == 2) {
+        dpars <- ""
+    }
+    
     vars <- all.vars(formula)[-1]
 
     fct_vars <- brms::get_prior(formula, data)$group
