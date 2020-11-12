@@ -8,7 +8,7 @@
 #'
 #' @export
 autoprior <- function(formula, data) {
-    stopifnot(is.formula(formula))
+    stopifnot(inherits(formula, "formula"))
     depvar <- all.vars(formula)[1]
     cats <- levels(data[,depvar])
     stopifnot(length(cats) > 0)
