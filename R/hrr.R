@@ -944,6 +944,7 @@ psw_counts[i] = multinomial_rng(to_vector(tmp), ps_counts[i]);
                                            stringr::fixed("}"),
                                            "
 psw_counts[i, 2] = binomial_rng(ps_counts[i], tmp);
+psw_counts[i, 1] = ps_counts[i] - psw_counts[i, 2];
 }
 ")
         }
