@@ -110,8 +110,8 @@ hrr <- function(formula, data, ps, result, areavar,
     if (!is.element("count", names(ps))) {
         stop("ps data frame lacks variable count")
     }
-    if (any(ps$count < 0)) {
-        stop("ps data frame has negative counts")
+    if (any(ps$count <= 0)) {
+        stop("ps data frame has negative or zero counts")
     }
 
 ### Coerce to integer
