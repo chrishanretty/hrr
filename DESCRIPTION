@@ -1,5 +1,5 @@
-Package: hrr
-Title: Hierarchical related regression for categorical outcomes
+Package: hrr2
+Title: Hierarchical Related Regression for Categorical Outcomes
 Version: 0.0.0.9000
 Authors@R: 
     person(given = "Chris",
@@ -14,11 +14,6 @@ LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
 Depends: 
-    R (>= 3.5.0), cmdstanr (>= 0.1.0), brms (>= 2.14.0), rstan (>= 2.21.2)
-Imports: 
-    stringr,
-    glue,
-    magrittr,
-    tidyr,
-    dplyr,
-    abind
+    R (>= 3.5.0), rstan (>= 2.21.2)
+Suggests:
+    cmdstanr (>= 0.1.0)
