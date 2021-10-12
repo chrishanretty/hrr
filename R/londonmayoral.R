@@ -38,6 +38,9 @@
 #' res <- unique(londonmayor[,c("ONSCode", "Con_counts_2016", "Lab_counts_2016", "Green_counts_2016",
 #' "LDem_counts_2016", "UKIP_counts_2016", "Other_counts_2016", "DNV_counts_2016")])
 #'
+#' ## Make sure column names of results data frame match unique values of vi
+#' names(res) <- c("ONSCode", "Con", "Lab", "Green",
+#' "LDem", "UKIP", "Other", "DNV")
 #' #' ## Computationally intensive bit
 #' \dontrun{
 #' mod <- hrr(f, data = londonmayor, ps = londonps, aux = aux,

@@ -145,8 +145,7 @@ postprocess <- function(obj, f, data, ps, areavar, weightvar, catlu, probs = c(0
     cont_predictors <- terms(f, lhs = FALSE, rhs = c(FALSE, TRUE))
     cont_predictors <- all.vars(cont_predictors)
 
-    betas <- coef_smry %>%
-        filter(grepl("^b_mu", param))
+    betas <- coef_smry[grepl("^b_mu", param), )
 
     for (i in 1:length(cont_predictors)) {
         betas$param <- sub(paste0("[", i, "]"),
@@ -157,8 +156,8 @@ postprocess <- function(obj, f, data, ps, areavar, weightvar, catlu, probs = c(0
 
 ### (b) Replace z_1_[depvar_level][catlevel] with names of categorical variables
     ### and levels that are stored in catlu
-    zs <- coef_smry %>%
-        filter(grepl("^z_", param))
+    zs <- coef_smry[grepl("^z_", param), ]
+    
     for (i in 1:length(catlu)) {
 ### First replace the entry in square brackets with the level
         for (j in 1:length(catlu[[i]]$levels)) { 
