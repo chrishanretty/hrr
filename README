@@ -1,3 +1,5 @@
+# The hrr package
+
 `hrr` is an R package that estimates hierarchical related regression models. 
 
 Hierarchical related regression models are described in:
