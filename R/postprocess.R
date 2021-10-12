@@ -145,7 +145,7 @@ postprocess <- function(obj, f, data, ps, areavar, weightvar, catlu, probs = c(0
     cont_predictors <- terms(f, lhs = FALSE, rhs = c(FALSE, TRUE))
     cont_predictors <- all.vars(cont_predictors)
 
-    betas <- coef_smry[grepl("^b_mu", param), )
+    betas <- coef_smry[grepl("^b_mu", param), ]
 
     for (i in 1:length(cont_predictors)) {
         betas$param <- sub(paste0("[", i, "]"),
