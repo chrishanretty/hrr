@@ -40,4 +40,24 @@ A dataset containing individual post-election responses from the
 British Election Study, auxiliary vote shares from 2012 mayoral
 election, and aggregate counts from the 2016 election.
 }
+\examples{
+data("londonmayor")
+data("londonps")
+
+f <- vi ~ ageGroup + education + ethnicity + gender | LabPct_sc + LDemPct_sc + GreenPct_sc + OtherPct_sc
+
+aux <- unique(londonmayor[,c("ONSCode", "LabPct_sc", "LDemPct_sc", "GreenPct_sc",
+"OtherPct_sc")])
+res <- unique(londonmayor[,c("ONSCode", "Con_16_count", "Lab_16_count", "Green_16_count",
+"LDem_16_count", "UKIP_16_count", "Other_16_count", "DNV_16_count")])
+
+#' ## Computationally intensive bit
+\dontrun{
+mod <- hrr(f, data = londonmayor, ps = londonps, aux = aux,
+    res = res, areavar = "ONSCode", weightvar = "count",
+    testing = FALSE, adjust = FALSE, overdispersed = TRUE,
+    iter = 320, chains = 4, cores = 4)
+}
+
+}
 \keyword{datasets}

@@ -27,5 +27,24 @@
 #'   \item{Other_16_count}{Borough count of votes won by seven other candidates}
 #'   \item{DNV_16_count}{Borough population over 16 less total votes cast}
 #' }
+#' @examples
+#' data("londonmayor")
+#' data("londonps")
+#'
+#' f <- vi ~ ageGroup + education + ethnicity + gender | LabPct_sc + LDemPct_sc + GreenPct_sc + OtherPct_sc
+#'
+#' aux <- unique(londonmayor[,c("ONSCode", "LabPct_sc", "LDemPct_sc", "GreenPct_sc",
+#' "OtherPct_sc")])
+#' res <- unique(londonmayor[,c("ONSCode", "Con_16_count", "Lab_16_count", "Green_16_count",
+#' "LDem_16_count", "UKIP_16_count", "Other_16_count", "DNV_16_count")])
+#'
+#' #' ## Computationally intensive bit
+#' \dontrun{
+#' mod <- hrr(f, data = londonmayor, ps = londonps, aux = aux,
+#'     res = res, areavar = "ONSCode", weightvar = "count",
+#'     testing = FALSE, adjust = FALSE, overdispersed = TRUE,
+#'     iter = 320, chains = 4, cores = 4)
+#' }
+#' 
 #' @source Individual data from the British Election Study. Results from 2012 and 2016 elections from \url{https://data.london.gov.uk/}
 "londonmayor"
