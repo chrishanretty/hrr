@@ -164,6 +164,8 @@ hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adju
     retval$depvar_levels <- depvar_levels
     retval$catlu <- catlu
     retval <- postprocess(retval, f, data, ps, areavar, weightvar, catlu, probs)
+    retval$code <- model_code
+    retval$data <- stan_data
     return(retval)
 
     
