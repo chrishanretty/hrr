@@ -126,7 +126,7 @@ hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adju
     ## Sort the results data in the same way
     
 ### Generate the model code
-    model_code <- make_stan_code(f, data, ps, aux, adjust, overdispersed, threading)
+    model_code <- make_stan_code(f, data, ps, aux, res, adjust, overdispersed, threading)
 
 ### Generate the data
     stan_data <- make_stan_data(f, data, ps, aux, res, areavar, weightvar, threading)

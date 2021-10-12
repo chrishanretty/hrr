@@ -1,11 +1,11 @@
-make_stan_code <- function(f, data, ps, aux, adjust, overdispersed, threading) {
+make_stan_code <- function(f, data, ps, aux, res, adjust, overdispersed, threading) {
 
     function_code <- make_function_code(f, data, ps, aux, adjust)
     data_code <- make_data_code(f, data, ps, aux)
     tdata_code <- make_tdata_code(f, data, ps, aux)
     params_code <- make_params_code(f, data, ps, aux, adjust, overdispersed)
     tparams_code <- make_tparams_code(f, data, ps, aux, adjust)
-    model_code <- make_model_code(f, data, ps, aux, adjust, overdispersed, threading)
+    model_code <- make_model_code(f, data, ps, aux, res, adjust, overdispersed, threading)
     genquant_code <- make_genquant_code(f, data, ps, aux, adjust)
 
     ## Concatenate all the code blocks
@@ -591,7 +591,7 @@ make_tparams_code <- function(f, data, ps, aux, adjust) {
     return(code)    
 }
 
-make_model_code <- function(f, data, ps, aux, adjust, overdispersed, threading) {
+make_model_code <- function(f, data, ps, aux, res, adjust, overdispersed, threading) {
 
     require(Formula)
     f <- Formula(f)
@@ -682,8 +682,13 @@ make_model_code <- function(f, data, ps, aux, adjust, overdispersed, threading) 
 
 ### Prior specifications for intercepts
     for (d in dv_levels[-1]) {
+        prior_mean <- log(sum(res[,d]) / sum(res[,dv_levels[1]]))
         code <- paste0(code,
-                       paste0(" target += normal_lpdf(Intercept_mu", d, " | 0, 2.5);\n"))
+                       paste0(" target += normal_lpdf(Intercept_mu",
+                              d,
+                              " | ",
+                              prior_mean,
+                              ", 2.5);\n"))
     }
 
 ### Standard normals for the standardized effects
