@@ -2,57 +2,120 @@
 % Please edit documentation in R/hrr.R
 \name{hrr}
 \alias{hrr}
-\title{Estimate hierarchical related regression model}
+\title{Estimate a hierarchical related regression model}
 \usage{
 hrr(
-  formula,
+  f,
   data,
   ps,
-  result,
+  aux,
+  res,
   areavar,
+  weightvar,
   testing = FALSE,
   adjust = FALSE,
-  dirichlet = FALSE,
-  mrp_only = FALSE,
-  weights = NULL,
-  adapt_delta = 0.9,
-  max_treedepth = 11,
+  overdispersed = FALSE,
+  threading = FALSE,
+  probs = c(0.025, 0.5, 0.975),
   ...
 )
 }
 \arguments{
-\item{formula}{a formula object, or something that can be coerced to a formula object}
+\item{f}{a two-part formula, with categorical predictors found in
+the post-stratification frame followed by a vertical bar and
+(continuous or categorical) predictors found in the auxiliary
+area-level data.}
 
-\item{data}{data frame containing the individual level data}
+\item{data}{a data frame containing the outcome variable and the
+categorical predictors specified in the first part of formula
+\code{f}. The data frame must also contain the area identifier
+named in \code{areavar}.}
 
-\item{ps}{data frame containing the post-stratification data; must contain variable \code{count}}
+\item{ps}{a data frame containing the categorical predictors
+specified in the first part of formula \code{f}. The data frame
+must also contain the area identifier named in \code{areavar}, and
+the post-stratification weights named in \code{weightvar}.}
 
-\item{result}{data frame containing the results; must contain column names equal to levels of the dependent variable in \code{formula}}
+\item{aux}{a data frame containing the continuous or categorical
+predictors specified in the second part of formula
+\code{f}. The data frame must also contain the area identified
+named in \code{areavar}.}
 
-\item{areavar}{a character variable containing the name of the variable giving the area}
+\item{res}{a data frame containing the aggregate-level outcomes for
+each area. The data frame must include the area identifier
+named in \code{areavar}, and variables names equivalent to the
+levels of the response variable found in \code{data}.}
 
-\item{testing}{if testing is set to TRUE, brms will use the prior only, no data}
+\item{areavar}{a character string giving the name of an area
+identifier found in the different input data frames (\code{data},
+\code{ps}, \code{aux}, \code{res})}
 
-\item{adjust}{Can aggregate predictions from individual evidence be adjusted?}
+\item{weightvar}{a character string giving the name of the variable
+in data frame \code{ps} which contains the post-stratification
+weights. This is not the name of any variable in \code{data}
+containing survey weights: the package does not support such
+weights.}
 
-\item{dirichlet}{Use Dirichlet-Multinomial rather than multinomial}
+\item{testing}{a logical value. If \code{testing} is equal to TRUE, then
+the return value is a list containing Stan code and a list of
+data to pass to Stan. If \code{testing} is equal to FALSE, the model
+is estimated. Setting \code{testing} to TRUE can be useful to
+prototype Stan code which is then manually tweaked.}
 
-\item{mrp_only}{Ignore the aggregate element}
+\item{adjust}{a logical value. If \code{adjust} is equal to TRUE, the
+model for individual level outcomes includes a parameter not
+found in the aggregate model. This parameter can capture survey
+effects. If \code{adjust} is equal to FALSE (the default) the
+standard hierarchical related regression model is estimated.}
 
-\item{weights}{a character variable containing the name of the weighting variable}
+\item{overdispersed}{a logical value. If \code{overdispersed} is equal
+to TRUE, binary or categorical counts are modelled using a
+Beta-Binomial or Dirichlet-Multinomial distribution rather than
+a binomial or multinomial distribution.}
 
-\item{adapt_delta}{adapt_delta parameter}
+\item{threading}{an integer. If \code{threading} is equal to zero (the
+default), hrr estimates the model using RStan, with each chain
+operating on at most one core. If \code{threading} is a non-zero
+number, hrr estimates the model using cmdstanr, with
+within-chain multi-threading and \code{threading} threads per chain.}
 
-\item{max_treedepth}{max_treedepth parameter}
+\item{probs}{a vector of probabilities. This parameter affects the
+summary statistics returned.}
 
-\item{...}{additional parameters passed to cmdstanr}
+\item{...}{other arguments passed on RStan or (if threading > 0) to
+cmdstanr. Common arguments include \code{chains}, \code{warmup}, \code{iter},
+\code{cores} and \code{seed}. Note that adapt_delta is automatically set
+to 0.99.}
 }
 \value{
-returns TRUE or reports an error
+A list with entries \code{area_smry}, \code{grp_smry}, and \code{fit}.
 }
 \description{
-Estimate hierarchical related regression model
+\code{hrr} returns a list containing a Stan fit, a tidy data frame
+of coefficients, and pre-calculated tables showing the popularity
+of different options amongst different groups defined by the
+categorical predictors in the model.
 }
 \examples{
+data("toydat")
+data("toypsf")
+
+f <- cat_y ~ k_1 + k_2 + k_3 | x_1 + x_2
+
+aux <- unique(toydat[,c("area", "x_1", "x_2")])
+res <- unique(toydat[,c("area", "red", "green", "blue")])
+
+## Generate Stan code and data for later use
+mod <- hrr(f, data = toydat, ps = toypsf, aux = aux,
+    res = res, areavar = "area", weightvar = "count",
+    testing = TRUE, adjust = FALSE, overdispersed = TRUE)
+
+## Computationally intensive bit
+\dontrun{
+mod <- hrr(f, data = toydat, ps = toypsf, aux = aux,
+    res = res, areavar = "area", weightvar = "count",
+    testing = FALSE, adjust = FALSE, overdispersed = TRUE,
+    iter = 320, chains = 4, cores = 4)
+}
 
 }
