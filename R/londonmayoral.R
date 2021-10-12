@@ -35,8 +35,8 @@
 #'
 #' aux <- unique(londonmayor[,c("ONSCode", "LabPct_sc", "LDemPct_sc", "GreenPct_sc",
 #' "OtherPct_sc")])
-#' res <- unique(londonmayor[,c("ONSCode", "Con_16_count", "Lab_16_count", "Green_16_count",
-#' "LDem_16_count", "UKIP_16_count", "Other_16_count", "DNV_16_count")])
+#' res <- unique(londonmayor[,c("ONSCode", "Con_counts_2016", "Lab_counts_2016", "Green_counts_2016",
+#' "LDem_counts_2016", "UKIP_counts_2016", "Other_counts_2016", "DNV_counts_2016")])
 #'
 #' #' ## Computationally intensive bit
 #' \dontrun{
