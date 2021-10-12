@@ -80,7 +80,8 @@
 #'     testing = FALSE, adjust = FALSE, overdispersed = TRUE,
 #'     iter = 320, chains = 4, cores = 4)
 #' }
-#' 
+#'
+#' @export
 hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adjust = FALSE, overdispersed = FALSE, threading = FALSE, probs = c(0.025, 0.5, 0.975), ...) {
 
     f <- validate_formula(f, areavar, weightvar)
