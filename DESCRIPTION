@@ -1,4 +1,4 @@
-Package: hrr2
+Package: hrr
 Title: Hierarchical Related Regression for Categorical Outcomes
 Version: 0.0.0.9000
 Authors@R: 
