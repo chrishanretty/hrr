@@ -93,6 +93,13 @@ hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adju
     aux <- validate_aux(f, aux, areavar)
     ps <- validate_ps(f, ps, areavar, weightvar)
     res <- validate_res(f, res, data, areavar)
+
+    if (mrp_only & adjust) {
+        stop("Argument adjust must be set to FALSE for MRP-only runs")
+    }
+    if (mrp_only & overdispersed) {
+        stop("Argument overdispersed must be set to FALSE for MRP-only runs")
+    }
     
 ### All the inputs are fine on their own
 ### Now cut down to the intersection of ps and aux areavars
@@ -155,17 +162,11 @@ hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adju
         retval$fit <- fit
     } else {
 ### Find a way to specify the parameters we want to get
-        if (mrp_only) {
-            fit <- stan(file = tf, data = stan_data,
-                        control = list(adapt_delta = 0.99),
-                        ...)
-        } else { 
-            fit <- stan(file = tf, data = stan_data,
-                        pars = "psw_counts",
-                        include = FALSE,
-                        control = list(adapt_delta = 0.99),
-                        ...)
-        }
+        fit <- stan(file = tf, data = stan_data,
+                    pars = "psw_counts",
+                    include = FALSE,
+                    control = list(adapt_delta = 0.99),
+                    ...)
         retval$fit <- fit
     }
 
