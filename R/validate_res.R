@@ -3,7 +3,7 @@ validate_res <- function(f, res, data, areavar) {
     f <- Formula(f)
 
     if (inherits(res, "tbl_df")) {
-        res <- as.res.frame(res)
+        res <- as.data.frame(res)
     }
     if (inherits(data, "tbl_df")) {
         data <- as.data.frame(data)
