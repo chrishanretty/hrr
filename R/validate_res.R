@@ -1,7 +1,14 @@
 validate_res <- function(f, res, data, areavar) {
     require(Formula)
     f <- Formula(f)
-        
+
+    if (inherits(res, "tbl_df")) {
+        res <- as.res.frame(res)
+    }
+    if (inherits(data, "tbl_df")) {
+        data <- as.data.frame(data)
+    }
+    
     depvar <- terms(f, lhs = TRUE, rhs = FALSE)
     depvar <- all.vars(depvar)
 

@@ -3,6 +3,10 @@ validate_aux <- function(f, aux, areavar) {
     require(Formula)
     f <- Formula(f)
 
+    if (inherits(aux, "tbl_df")) {
+        aux <- as.data.frame(aux)
+    }
+    
     ## Does it contain all the variables in the formula?
     aux_predictors <- terms(f, lhs = FALSE, rhs = c(FALSE, TRUE))
 

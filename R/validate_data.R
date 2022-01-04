@@ -3,6 +3,11 @@ validate_data <- function(f, data, areavar) {
     require(Formula)
     f <- Formula(f)
 
+### If it inherits tbl_df, drop it
+    if (inherits(data, "tbl_df")) {
+        data <- as.data.frame(data)
+    }
+    
     ## Does it contain all the variables in the formula?
     ind_predictors <- terms(f, lhs = FALSE, rhs = c(TRUE, FALSE))
     ## ind_predictors <- attr(ind_predictors, "variables")
