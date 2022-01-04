@@ -78,7 +78,7 @@ make_function_code <- function(f, data, ps, aux, adjust) {
         addon <- paste0(" real Intercept_mu", d, ", ")
         code <- paste0(code,
                        addon)
-        for (k in 1:ncatvars) {
+        for (k in 1:(ncatvars+1)) {
             addon <- paste0("vector r_", k, "_", d, ", ")
             code <- paste0(code,
                            addon)
@@ -87,7 +87,7 @@ make_function_code <- function(f, data, ps, aux, adjust) {
     }
 
 ### (c) Data
-    for (k in 1:ncatvars) {
+    for (k in 1:(ncatvars+1)) {
         addon <- paste0("int[] J_", k, ", ")
         code <- paste0(code, addon)
     }
@@ -128,10 +128,10 @@ make_function_code <- function(f, data, ps, aux, adjust) {
     for (d in dv_levels[-1]) {
         addon <- paste0("mu", d, "[n] += ")
         code <- paste0(code, addon)
-        for (k in 1:ncatvars) {
+        for (k in 1:(ncatvars+1)) {
             code <- paste0(code,
                            paste0("r_", k, "_", d, "[J_", k, "[nn]]"))
-            if (k < ncatvars) {
+            if (k < (ncatvars + 1)) {
                 code <- paste0(code,
                                " + ")
             } else {
@@ -190,7 +190,7 @@ make_function_code <- function(f, data, ps, aux, adjust) {
         addon <- paste0(" real Intercept_mu", d, ", ")
         code <- paste0(code,
                        addon)
-        for (k in 1:ncatvars) {
+        for (k in 1:(ncatvars+1)) {
             addon <- paste0("vector r_", k, "_", d, ", ")
             code <- paste0(code,
                            addon)
@@ -199,9 +199,9 @@ make_function_code <- function(f, data, ps, aux, adjust) {
     }
 
 ### (c) Data
-    for (k in 1:ncatvars) {
+    for (k in 1:(ncatvars+1)) {
         addon <- paste0("int[] J_", k)
-        if (k < ncatvars) {
+        if (k < (ncatvars+1)) {
             addon <- paste0(addon, ", ")
         }
         code <- paste0(code, addon)
@@ -243,11 +243,11 @@ make_function_code <- function(f, data, ps, aux, adjust) {
     for (d in dv_levels[-1]) {
         addon <- paste0("mu", d, "[n] += ")
         code <- paste0(code, addon)
-        for (k in 1:ncatvars) {
+        for (k in 1:(ncatvars+1)) {
             code <- paste0(code,
                            paste0("r_", k, "_", d, "[J_", k, "[nn]]"))
 
-            if (k < ncatvars) {
+            if (k < (ncatvars+1)) {
                 code <- paste0(code,
                                " + ")
             } else {
@@ -316,7 +316,13 @@ make_data_code <- function(f, data, ps, aux) {
         stop("Continuous variables not yet supported")
     } else if (depvar_type == "bin") {
         ## do nothing
-        stop("Binary variables not yet supported")
+        ## stop("Binary variables not yet supported")
+
+        ## Treat if as though it were a categorical variable
+        code <- paste0(code,
+                       " int<lower=2> ncat;  // number of categories\n")
+        code <- paste0(code,
+                       " int<lower=1, upper=ncat> Y[N];  // response variable\n")
     } else {
         code <- paste0(code,
                        " int<lower=2> ncat;  // number of categories\n")
@@ -336,7 +342,7 @@ make_data_code <- function(f, data, ps, aux) {
 
 ### For each categorical predictor
     ncatvars <- length(ind_predictors)
-    for(i in 1:ncatvars) {
+    for(i in 1:(ncatvars+1)) {
         addon <- paste0("  int<lower=1> N_", i,
                         ";  // number of grouping levels\n",
                         " int<lower=1, upper = N_", i,
@@ -356,7 +362,7 @@ make_data_code <- function(f, data, ps, aux) {
     code <- paste0(code,
                    " matrix[ps_N, K_X] ps_X;  // \n")    
 
-    for(i in 1:ncatvars) {
+    for(i in 1:(ncatvars+1)) {
         addon <- paste0(" int<lower=1, upper=N_", i, "> ps_J_", i,
                         "[ps_N];  // grouping indicator per observation\n")
         code <- paste0(code,
@@ -372,7 +378,7 @@ make_data_code <- function(f, data, ps, aux) {
     code <- paste0(code,
                    " int ps_counts[ps_N];\n")
 
-    if (depvar_type == "cat") { 
+    if (depvar_type == "cat" | depvar_type == "bin") { 
         code <- paste0(code,
                        " int aggy[nAreas, ncat];\n")
     } else {
@@ -448,7 +454,7 @@ make_params_code <- function(f, data, ps, aux, adjust, overdispersed) {
 
 ### We want parameters for each option/variable combination
     ncatvars <- length(ind_predictors)
-    for (i in 1:ncatvars) {
+    for (i in 1:(ncatvars+1)) {
         for (d in dv_levels[-1]) {
             addon <- paste0(" vector[N_", i, "] z_",
                             i,
@@ -503,7 +509,7 @@ make_tparams_code <- function(f, data, ps, aux, adjust, mrp_only) {
 
 ### We want parameters for each option/variable combination
     ncatvars <- length(ind_predictors)
-    for (i in 1:ncatvars) {
+    for (i in 1:(ncatvars+1)) {
         for (d in dv_levels[-1]) {
             addon <- paste0(" vector[N_", i, "] r_",
                             i,
@@ -525,7 +531,7 @@ make_tparams_code <- function(f, data, ps, aux, adjust, mrp_only) {
     if (adjust) { 
         code <- paste0(code, " vector [ncat] adj; \n")
     }
-    for (i in 1:ncatvars) {
+    for (i in 1:(ncatvars+1)) {
         for (d in dv_levels[-1]) {
             addon <- paste0(" r_",
                             i,
@@ -573,7 +579,7 @@ make_tparams_code <- function(f, data, ps, aux, adjust, mrp_only) {
             addon <- paste0(" Intercept_mu", d, ", ")
             code <- paste0(code,
                            addon)
-            for (k in 1:ncatvars) {
+            for (k in 1:(ncatvars+1)) {
                 addon <- paste0(" r_", k, "_", d, ", ")
                 code <- paste0(code,
                                addon)
@@ -581,7 +587,7 @@ make_tparams_code <- function(f, data, ps, aux, adjust, mrp_only) {
             
         }
 
-        for (i in 1:ncatvars) {
+        for (i in 1:(ncatvars+1)) {
             addon <- paste0("ps_J_", i, ", ")
             code <- paste0(code, addon)
         }
@@ -654,7 +660,7 @@ make_model_code <- function(f, data, ps, aux, res, adjust, overdispersed, thread
         addon <- paste0(" Intercept_mu", d, ", ")
         code <- paste0(code,
                        addon)
-        for (k in 1:ncatvars) {
+        for (k in 1:(ncatvars+1)) {
             addon <- paste0(" r_", k, "_", d, ", ")
             code <- paste0(code,
                            addon)
@@ -664,9 +670,9 @@ make_model_code <- function(f, data, ps, aux, res, adjust, overdispersed, thread
 
     code <- paste0(code, "\n")
     
-    for (i in 1:ncatvars) {
+    for (i in 1:(ncatvars+1)) {
         addon <- paste0("J_", i)
-        if (i != ncatvars) {
+        if (i != (ncatvars+1)) {
             addon <- paste0(addon, ", ")
         }
         
@@ -701,14 +707,14 @@ make_model_code <- function(f, data, ps, aux, res, adjust, overdispersed, thread
     }
 
 ### Standard normals for the standardized effects
-    for (i in 1:ncatvars) {
+    for (i in 1:(ncatvars+1)) {
         for (d in dv_levels[-1]) {
             code <- paste0(code,
                            paste0("target += std_normal_lpdf(z_", i, "_", d, ");\n"))
         }
     }
 
-    for (i in 1:ncatvars) {
+    for (i in 1:(ncatvars+1)) {
         for (d in dv_levels[-1]) {
             code <- paste0(code,
                            paste0("target += normal_lpdf(sd_", i, "_", d, "|  0, 2.5) - 1 * normal_lccdf(0 | 0, 2.5);\n"))
@@ -746,7 +752,7 @@ make_genquant_code <- function(f, data, ps, aux, adjust) {
                    " int psw_counts[ps_N, ncat];\n")
 
 ### Initialize category-specific counts
-    for (i in 1:ncatvars) {
+    for (i in 1:(ncatvars+1)) {
         code <- paste0(code,
                        paste0(" int ps_J_", i, "_counts[N_", i, ", ncat];\n"))
     }
@@ -757,7 +763,7 @@ make_genquant_code <- function(f, data, ps, aux, adjust) {
                    "\n\n\n")
 
 ### Set them to zero
-    for (i in 1:ncatvars) {
+    for (i in 1:(ncatvars+1)) {
         code <- paste0(code,
                        "for (i in 1:N_", i, ") {\n")
         code <- paste0(code,
@@ -796,16 +802,16 @@ make_genquant_code <- function(f, data, ps, aux, adjust) {
         addon <- paste0("  b_mu", d,
                         ", Intercept_mu", d, ", ")
         code <- paste0(code, addon)
-        for (i in 1:ncatvars) {
+        for (i in 1:(ncatvars+1)) {
             addon <- paste0("r_", i, "_", d, ", ")
             code <- paste0(code, addon)
         }
     }
 
     code <- paste0(code, "\n  ")
-    for (i in 1:ncatvars) {
+    for (i in 1:(ncatvars+1)) {
         addon <- paste0("ps_J_", i)
-        if (i != ncatvars) {
+        if (i != (ncatvars+1)) {
             addon <- paste0(addon, ", ")
         }
         
@@ -819,7 +825,7 @@ make_genquant_code <- function(f, data, ps, aux, adjust) {
                    "\n}\n")
 
 ### Start on adding on things
-    for (i in 1:ncatvars) {
+    for (i in 1:(ncatvars+1)) {
         code <- paste0(code,
                        "for (p in 1:ps_N) {\n  for (k in 1:ncat) {\n")
 

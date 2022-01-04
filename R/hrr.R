@@ -58,10 +58,10 @@
 #'     then only individual responses are modelled. If `mrp_only` is
 #'     equal to FALSE (the default), aggregate outcomes are also
 #'     modelled.
+#' @param stan_control a list of arguments passed to RStan or
+#'     cmdstanr's control argument.
 #' @param ... other arguments passed on RStan or (if threading > 0) to
-#'     cmdstanr. Common arguments include `chains`, `warmup`, `iter`,
-#'     `cores` and `seed`. Note that adapt_delta is automatically set
-#'     to 0.99.
+#'     cmdstanr.
 #' @return A list with entries `area_smry`, `grp_smry`, and `fit`.
 #' @examples
 #' data("toydat")
@@ -86,7 +86,7 @@
 #' }
 #'
 #' @export
-hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adjust = FALSE, overdispersed = FALSE, threading = FALSE, probs = c(0.025, 0.5, 0.975), mrp_only = FALSE, ...) {
+hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adjust = FALSE, overdispersed = FALSE, threading = FALSE, probs = c(0.025, 0.5, 0.975), mrp_only = FALSE, stan_control = list(adapt_delta = 0.99, max_treedepth = 12), ...) {
 
     f <- validate_formula(f, areavar, weightvar)
     data <- validate_data(f, data, areavar)
@@ -165,7 +165,7 @@ hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adju
         fit <- stan(file = tf, data = stan_data,
                     pars = "psw_counts",
                     include = FALSE,
-                    control = list(adapt_delta = 0.99),
+                    control = stan_control,
                     ...)
         retval$fit <- fit
     }

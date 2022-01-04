@@ -62,6 +62,10 @@ make_stan_data <- function(f, data, ps, aux, res, areavar, weightvar, threading,
     }
 
 
+### Add on the final area categorical predictor
+    i <- ncatvars + 1
+    stan_data[[paste0("N_", i)]] <- length(unique(data[,areavar]))
+    stan_data[[paste0("J_", i)]] <- data[,areavar]
     
 ### Prior_only argument
     if ("prior_only" %in% names(dots)) {
@@ -81,7 +85,10 @@ make_stan_data <- function(f, data, ps, aux, res, areavar, weightvar, threading,
     for (i in 1:ncatvars) {
         stan_data[[paste0("ps_J_", i)]] <- ps[,ind_predictors[i]]
     }
-    
+
+    i <- ncatvars + 1
+    stan_data[[paste0("ps_J_", i)]] <- ps[,areavar]
+
 ### Return everything    
     return(stan_data)
 }
