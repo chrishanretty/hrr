@@ -86,7 +86,7 @@
 #' }
 #'
 #' @export
-hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adjust = FALSE, overdispersed = FALSE, threading = FALSE, probs = c(0.025, 0.5, 0.975), ...) {
+hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adjust = FALSE, overdispersed = FALSE, threading = FALSE, probs = c(0.025, 0.5, 0.975), mrp_only = FALSE, ...) {
 
     f <- validate_formula(f, areavar, weightvar)
     data <- validate_data(f, data, areavar)
@@ -130,7 +130,7 @@ hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adju
     ## Sort the results data in the same way
     
 ### Generate the model code
-    model_code <- make_stan_code(f, data, ps, aux, res, adjust, overdispersed, threading)
+    model_code <- make_stan_code(f, data, ps, aux, res, adjust, overdispersed, threading, mrp_only)
 
 ### Generate the data
     stan_data <- make_stan_data(f, data, ps, aux, res, areavar, weightvar, threading)
@@ -154,12 +154,18 @@ hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adju
         fit <- mod$sample(data = stan_data, adapt_delta = 0.99, ... )
         retval$fit <- fit
     } else {
-        ### Find a way to specify the parameters we want to get
-        fit <- stan(file = tf, data = stan_data,
-                    pars = "psw_counts",
-                    include = FALSE,
-                    control = list(adapt_delta = 0.99),
-                    ...)
+### Find a way to specify the parameters we want to get
+        if (mrp_only) {
+            fit <- stan(file = tf, data = stan_data,
+                        control = list(adapt_delta = 0.99),
+                        ...)
+        } else { 
+            fit <- stan(file = tf, data = stan_data,
+                        pars = "psw_counts",
+                        include = FALSE,
+                        control = list(adapt_delta = 0.99),
+                        ...)
+        }
         retval$fit <- fit
     }
 

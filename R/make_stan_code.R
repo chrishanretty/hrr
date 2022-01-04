@@ -1,11 +1,11 @@
-make_stan_code <- function(f, data, ps, aux, res, adjust, overdispersed, threading) {
+make_stan_code <- function(f, data, ps, aux, res, adjust, overdispersed, threading, mrp_only) {
 
     function_code <- make_function_code(f, data, ps, aux, adjust)
     data_code <- make_data_code(f, data, ps, aux)
     tdata_code <- make_tdata_code(f, data, ps, aux)
     params_code <- make_params_code(f, data, ps, aux, adjust, overdispersed)
-    tparams_code <- make_tparams_code(f, data, ps, aux, adjust)
-    model_code <- make_model_code(f, data, ps, aux, res, adjust, overdispersed, threading)
+    tparams_code <- make_tparams_code(f, data, ps, aux, adjust, mrp_only)
+    model_code <- make_model_code(f, data, ps, aux, res, adjust, overdispersed, threading, mrp_only)
     genquant_code <- make_genquant_code(f, data, ps, aux, adjust)
 
     ## Concatenate all the code blocks
@@ -484,7 +484,7 @@ make_params_code <- function(f, data, ps, aux, adjust, overdispersed) {
     return(code)
 }
 
-make_tparams_code <- function(f, data, ps, aux, adjust) {
+make_tparams_code <- function(f, data, ps, aux, adjust, mrp_only) {
 
     require(Formula)
     f <- Formula(f)
@@ -516,8 +516,11 @@ make_tparams_code <- function(f, data, ps, aux, adjust) {
         }
     }
 
-    code <- paste0(code,
-                   " matrix[nAreas, ncat] aggmu;\n")
+    if (!mrp_only) { 
+        code <- paste0(code,
+                       " matrix[nAreas, ncat] aggmu;\n")
+    }
+    
 
     if (adjust) { 
         code <- paste0(code, " vector [ncat] adj; \n")
@@ -547,51 +550,54 @@ make_tparams_code <- function(f, data, ps, aux, adjust) {
     
    
 ### Big chunk to get aggmu
-    code <- paste0(code,
-                   " for (i in 1:nAreas) {\n")
-    code <- paste0(code,
-                   "  aggmu[i] = pred_prob(")
-    if (adjust) {
+    if (!mrp_only) {
         code <- paste0(code,
-                       "adj, ")
-    }
-    
-    code <- paste0(code,
-                   "areastart[i], areastop[i], ncat, Y, ")
-
-    code <- paste0(code,
-                   "ps_Xc, ")
-
-    for(d in dv_levels[-1]) {
-        addon <- paste0(" b_mu", d, ", ")
+                       " for (i in 1:nAreas) {\n")
         code <- paste0(code,
-                       addon)
-        addon <- paste0(" Intercept_mu", d, ", ")
-        code <- paste0(code,
-                       addon)
-        for (k in 1:ncatvars) {
-            addon <- paste0(" r_", k, "_", d, ", ")
+                       "  aggmu[i] = pred_prob(")
+        if (adjust) {
             code <- paste0(code,
-                           addon)
+                           "adj, ")
         }
         
-    }
-
-    for (i in 1:ncatvars) {
-        addon <- paste0("ps_J_", i, ", ")
-        code <- paste0(code, addon)
-    }
-
-    code <- paste0(code,
-                   " ps_counts)'; \n }")
+        code <- paste0(code,
+                       "areastart[i], areastop[i], ncat, Y, ")
 
         code <- paste0(code,
+                       "ps_Xc, ")
+
+        for(d in dv_levels[-1]) {
+            addon <- paste0(" b_mu", d, ", ")
+            code <- paste0(code,
+                           addon)
+            addon <- paste0(" Intercept_mu", d, ", ")
+            code <- paste0(code,
+                           addon)
+            for (k in 1:ncatvars) {
+                addon <- paste0(" r_", k, "_", d, ", ")
+                code <- paste0(code,
+                               addon)
+            }
+            
+        }
+
+        for (i in 1:ncatvars) {
+            addon <- paste0("ps_J_", i, ", ")
+            code <- paste0(code, addon)
+        }
+
+        code <- paste0(code,
+                       " ps_counts)'; \n }")
+
+    }
+    ### End block for aggmu
+    code <- paste0(code,
                    "\n}\n\n")
 
     return(code)    
 }
 
-make_model_code <- function(f, data, ps, aux, res, adjust, overdispersed, threading) {
+make_model_code <- function(f, data, ps, aux, res, adjust, overdispersed, threading, mrp_only) {
 
     require(Formula)
     f <- Formula(f)
@@ -609,20 +615,23 @@ make_model_code <- function(f, data, ps, aux, res, adjust, overdispersed, thread
 
     code <- "model { \n"
 
-    if (overdispersed) { 
-        code <- paste0(code,
-                       "if (!prior_only) {\n",
-                       " for (i in 1:nAreas) {\n",
-                       "  aggy[i] ~ dirichlet_multinomial(",
-                       "prec * to_vector(aggmu[i]));",
-                       "\n }\n}\n\n")
-    } else {
-        code <- paste0(code,
-                       "if (!prior_only) {\n",
-                       " for (i in 1:nAreas) {\n",
-                       "  aggy[i] ~ multinomial(",
-                       "to_vector(aggmu[i]));",
-                       "\n }\n}\n\n")
+    if (!mrp_only) { 
+        if (overdispersed) { 
+            code <- paste0(code,
+                           "if (!prior_only) {\n",
+                           " for (i in 1:nAreas) {\n",
+                           "  aggy[i] ~ dirichlet_multinomial(",
+                           "prec * to_vector(aggmu[i]));",
+                           "\n }\n}\n\n")
+        } else {
+            code <- paste0(code,
+                           "if (!prior_only) {\n",
+                           " for (i in 1:nAreas) {\n",
+                           "  aggy[i] ~ multinomial(",
+                           "to_vector(aggmu[i]));",
+                           "\n }\n}\n\n")
+        }
+
     }
     
     
