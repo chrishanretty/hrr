@@ -54,6 +54,10 @@
 #'     within-chain multi-threading and `threading` threads per chain.
 #' @param probs a vector of probabilities. This parameter affects the
 #'     summary statistics returned.
+#' @param mrp_only a logical value. If `mrp_only` is equal to TRUE,
+#'     then only individual responses are modelled. If `mrp_only` is
+#'     equal to FALSE (the default), aggregate outcomes are also
+#'     modelled.
 #' @param ... other arguments passed on RStan or (if threading > 0) to
 #'     cmdstanr. Common arguments include `chains`, `warmup`, `iter`,
 #'     `cores` and `seed`. Note that adapt_delta is automatically set
