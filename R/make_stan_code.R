@@ -3,8 +3,8 @@ make_stan_code <- function(f, data, ps, aux, res, adjust, overdispersed, threadi
     function_code <- make_function_code(f, data, ps, aux, adjust)
     data_code <- make_data_code(f, data, ps, aux)
     tdata_code <- make_tdata_code(f, data, ps, aux)
-    params_code <- make_params_code(f, data, ps, aux, adjust, overdispersed)
-    tparams_code <- make_tparams_code(f, data, ps, aux, adjust, mrp_only)
+    params_code <- make_params_code(f, data, ps, aux, adjust, overdispersed, mrp_only)
+    tparams_code <- make_tparams_code(f, data, ps, aux, adjust, overdispersed, mrp_only)
     model_code <- make_model_code(f, data, ps, aux, res, adjust, overdispersed, threading, mrp_only)
     genquant_code <- make_genquant_code(f, data, ps, aux, adjust)
 
@@ -33,7 +33,7 @@ make_function_code <- function(f, data, ps, aux, adjust) {
     dv <- terms(f, lhs = TRUE, rhs = c(FALSE, FALSE))
     dv <- all.vars(dv)
 
-    dv_levels <- levels(data[,dv])
+    dv_levels <- levels(factor(data[,dv]))
 
 ### Need to write a function to generate predicted probabilities
 ### and a function for reduce_sum (different output signatures)
@@ -428,7 +428,7 @@ make_tdata_code <- function(f, data, ps, aux) {
     return(code)
 }
 
-make_params_code <- function(f, data, ps, aux, adjust, overdispersed) {
+make_params_code <- function(f, data, ps, aux, adjust, overdispersed, mrp_only) {
     require(Formula)
     f <- Formula(f)
         
@@ -440,7 +440,7 @@ make_params_code <- function(f, data, ps, aux, adjust, overdispersed) {
     dv <- terms(f, lhs = TRUE, rhs = c(FALSE, FALSE))
     dv <- all.vars(dv)
 
-    dv_levels <- levels(data[,dv])
+    dv_levels <- levels(factor(data[,dv]))
 
     code <- "parameters {\n"
     for (d in dv_levels[-1]) {
@@ -490,7 +490,7 @@ make_params_code <- function(f, data, ps, aux, adjust, overdispersed) {
     return(code)
 }
 
-make_tparams_code <- function(f, data, ps, aux, adjust, mrp_only) {
+make_tparams_code <- function(f, data, ps, aux, adjust, overdispersed, mrp_only) {
 
     require(Formula)
     f <- Formula(f)
@@ -503,7 +503,7 @@ make_tparams_code <- function(f, data, ps, aux, adjust, mrp_only) {
     dv <- terms(f, lhs = TRUE, rhs = c(FALSE, FALSE))
     dv <- all.vars(dv)
 
-    dv_levels <- levels(data[,dv])
+    dv_levels <- levels(factor(data[,dv]))
 
     code <- "transformed parameters {\n"
 
