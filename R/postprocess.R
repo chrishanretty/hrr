@@ -91,7 +91,7 @@ postprocess <- function(obj, f, data, ps, areavar, weightvar, catlu, probs = c(0
     grp_smry <- merge(grp_smry,
                        catlu_df,
                        by = c("var_idx", "level_idx"),
-                       all.x = TRUE,
+                       all.x = FALSE,
                        all.y = FALSE)
     
     levels <- obj$depvar_levels
