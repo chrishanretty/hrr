@@ -479,7 +479,7 @@ make_params_code <- function(f, data, ps, aux, adjust, overdispersed) {
     }
     if (overdispersed) { 
         code <- paste0(code,
-                       "\n real <lower=0>prec; \n")
+                       "\n real <lower=0>invprec; \n")
     }
     
     
@@ -531,6 +531,10 @@ make_tparams_code <- function(f, data, ps, aux, adjust, mrp_only) {
     if (adjust) { 
         code <- paste0(code, " vector [ncat] adj; \n")
     }
+    if (overdispersed) {
+        code <- paste0(code, " real<lower=0> prec; \n")
+    }
+    
     for (i in 1:(ncatvars+1)) {
         for (d in dv_levels[-1]) {
             addon <- paste0(" r_",
@@ -551,9 +555,12 @@ make_tparams_code <- function(f, data, ps, aux, adjust, mrp_only) {
 
     if (adjust) { 
         code <- paste0(code,
-                       "adj = append_row(0, adj0); ")
+                       "adj = append_row(0, adj0); \n ")
     }
-    
+    if (overdispersed) {
+        code <- paste0(code,
+                       "prec = 1.0 / invprec; \n")
+    }
    
 ### Big chunk to get aggmu
     if (!mrp_only) {
@@ -719,6 +726,14 @@ make_model_code <- function(f, data, ps, aux, res, adjust, overdispersed, thread
             code <- paste0(code,
                            paste0("target += normal_lpdf(sd_", i, "_", d, "|  0, 2.5) - 1 * normal_lccdf(0 | 0, 2.5);\n"))
         }
+    }
+
+### Prior specification for precision parameter
+    if (overdispersed) {
+        sd_in_agg_data <- sd(unlist(agg[,dv_levels]))
+        code <- paste0(code,
+                       paste0("target += normal_lpdf(invprec | 0, ", sd_in_agg_data, ");\n"))
+        
     }
     
 ### Finish it off
