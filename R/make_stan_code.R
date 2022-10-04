@@ -624,7 +624,7 @@ make_model_code <- function(f, data, ps, aux, res, adjust, overdispersed, thread
     dv <- terms(f, lhs = TRUE, rhs = c(FALSE, FALSE))
     dv <- all.vars(dv)
 
-    dv_levels <- levels(data[,dv])
+    dv_levels <- levels(factor(data[,dv]))
 
     code <- "model { \n"
 
@@ -730,7 +730,7 @@ make_model_code <- function(f, data, ps, aux, res, adjust, overdispersed, thread
 
 ### Prior specification for precision parameter
     if (overdispersed) {
-        sd_in_agg_data <- sd(unlist(agg[,dv_levels]))
+        sd_in_agg_data <- sd(unlist(res[,dv_levels]))
         code <- paste0(code,
                        paste0("target += normal_lpdf(invprec | 0, ", sd_in_agg_data, ");\n"))
         

@@ -177,7 +177,8 @@ postprocess <- function(obj, f, data, ps, areavar, weightvar, catlu, probs = c(0
     coefs <- merge(betas, zs, all = TRUE)
     coefs <- coefs[order(coefs$param),]
     retval$coefs <- coefs
-    
+    retval$catlu <- catlu
+    retval$areas <- areas
     return(retval)
     
 }

@@ -17,6 +17,8 @@ hrr(
   overdispersed = FALSE,
   threading = FALSE,
   probs = c(0.025, 0.5, 0.975),
+  mrp_only = FALSE,
+  stan_control = list(adapt_delta = 0.99, max_treedepth = 12),
   ...
 )
 }
@@ -82,10 +84,16 @@ within-chain multi-threading and \code{threading} threads per chain.}
 \item{probs}{a vector of probabilities. This parameter affects the
 summary statistics returned.}
 
+\item{mrp_only}{a logical value. If \code{mrp_only} is equal to TRUE,
+then only individual responses are modelled. If \code{mrp_only} is
+equal to FALSE (the default), aggregate outcomes are also
+modelled.}
+
+\item{stan_control}{a list of arguments passed to RStan or
+cmdstanr's control argument.}
+
 \item{...}{other arguments passed on RStan or (if threading > 0) to
-cmdstanr. Common arguments include \code{chains}, \code{warmup}, \code{iter},
-\code{cores} and \code{seed}. Note that adapt_delta is automatically set
-to 0.99.}
+cmdstanr.}
 }
 \value{
 A list with entries \code{area_smry}, \code{grp_smry}, and \code{fit}.
