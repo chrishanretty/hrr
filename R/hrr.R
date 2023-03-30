@@ -68,7 +68,7 @@
 #' data("toypsf")
 #'
 #' f <- cat_y ~ k_1 + k_2 + k_3 | x_1 + x_2
-#' 
+#'
 #' aux <- unique(toydat[,c("area", "x_1", "x_2")])
 #' res <- unique(toydat[,c("area", "red", "green", "blue")])
 #'
@@ -86,7 +86,11 @@
 #' }
 #'
 #' @export
-hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adjust = FALSE, overdispersed = FALSE, threading = FALSE, probs = c(0.025, 0.5, 0.975), mrp_only = FALSE, stan_control = list(adapt_delta = 0.99, max_treedepth = 12), ...) {
+hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE,
+                adjust = FALSE, overdispersed = FALSE, threading = FALSE,
+                probs = c(0.025, 0.5, 0.975), mrp_only = FALSE,
+                stan_control = list(adapt_delta = 0.99, max_treedepth = 12),
+                ...) {
 
     f <- validate_formula(f, areavar, weightvar)
     data <- validate_data(f, data, areavar)
@@ -94,29 +98,29 @@ hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adju
     ps <- validate_ps(f, ps, areavar, weightvar)
     res <- validate_res(f, res, data, areavar)
 
-    if (mrp_only & adjust) {
+    if (mrp_only && adjust) {
         stop("Argument adjust must be set to FALSE for MRP-only runs")
     }
-    if (mrp_only & overdispersed) {
+    if (mrp_only && overdispersed) {
         stop("Argument overdispersed must be set to FALSE for MRP-only runs")
     }
-    
+
 ### All the inputs are fine on their own
 ### Now cut down to the intersection of ps and aux areavars
-    areas <- intersect(as.character(aux[,areavar]),
-                       as.character(ps[,areavar]))
+    areas <- intersect(as.character(aux[, areavar]),
+                       as.character(ps[, areavar]))
     areas <- sort(areas)
-    
-    data[,areavar] <- factor(data[,areavar],
+
+    data[, areavar] <- factor(data[, areavar],
                              levels = areas)
-    ps[,areavar] <- factor(ps[,areavar],
+    ps[, areavar] <- factor(ps[, areavar],
                            levels = areas)
-    aux[,areavar] <- factor(aux[,areavar],
+    aux[, areavar] <- factor(aux[, areavar],
                             levels = areas)
 
-    data <- data[!is.na(data[,areavar]),]
-    ps <- ps[!is.na(ps[,areavar]),]
-    aux <- aux[!is.na(aux[,areavar]),]
+    data <- data[!is.na(data[, areavar]), ]
+    ps <- ps[!is.na(ps[, areavar]), ]
+    aux <- aux[!is.na(aux[, areavar]), ]
 
 ### Make sure that the categorical predictors are the same in the
 ### post-strat data and the individual level data
@@ -126,22 +130,25 @@ hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adju
     res <- tmp$res
     aux <- tmp$aux
     catlu <- tmp$catlu
-    
+
     ### Get out the depvar levels
     depvar <- terms(f, lhs = TRUE, rhs = FALSE)
     depvar <- all.vars(depvar)
-    depvar_levels <- levels(factor(data[,depvar]))
-    
+    depvar_levels <- levels(factor(data[, depvar]))
+
 ### Sort the post-strat data in ascending order of area
-    ps <- ps[order(ps[,areavar], decreasing = FALSE),]
+    ps <- ps[order(ps[, areavar], decreasing = FALSE), ]
     ## Sort the results data in the same way
-    
+
 ### Generate the model code
-    model_code <- make_stan_code(f, data, ps, aux, res, adjust, overdispersed, threading, mrp_only)
+    model_code <- make_stan_code(f, data, ps, aux, res,
+                                 adjust, overdispersed,
+                                 threading, mrp_only)
 
 ### Generate the data
-    stan_data <- make_stan_data(f, data, ps, aux, res, areavar, weightvar, threading)
-    
+    stan_data <- make_stan_data(f, data, ps, aux, res,
+                                areavar, weightvar, threading)
+
 ### Write the code to a temporary file with .stan ending
     tf <- tempfile()
     tf <- paste0(tf, ".stan")
@@ -153,16 +160,16 @@ hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adju
     }
 
     retval <- list()
-    
+
     if (threading) {
         stop("Threading not supported yet")
-        mod <- cmdstan_model(tf,
+        mod <- cmdstanr::cmdstan_model(tf,
                     cpp_options = list(stan_threads = TRUE))
-        fit <- mod$sample(data = stan_data, adapt_delta = 0.99, ... )
+        fit <- mod$sample(data = stan_data, adapt_delta = 0.99, ...)
         retval$fit <- fit
     } else {
 ### Find a way to specify the parameters we want to get
-        fit <- stan(file = tf, data = stan_data,
+        fit <- rstan::stan(file = tf, data = stan_data,
                     pars = "psw_counts",
                     include = FALSE,
                     control = stan_control,
@@ -178,6 +185,4 @@ hrr <- function(f, data, ps, aux, res, areavar, weightvar, testing = FALSE, adju
     retval$code <- model_code
     retval$data <- stan_data
     return(retval)
-
-    
 }
