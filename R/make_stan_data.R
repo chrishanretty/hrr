@@ -57,7 +57,7 @@ make_stan_data <- function(f, data, ps, aux, res, areavar, weightvar, threading,
     ncatvars <- length(ind_predictors)
 
     for (i in 1:ncatvars) {
-        stan_data[[paste0("N_", i)]] <- length(levels(ps[, ind_predictors[i]]))
+        stan_data[[paste0("N_", i)]] <- length(unique(ps[, ind_predictors[i]]))
         stan_data[[paste0("J_", i)]] <- data[, ind_predictors[i]]
     }
 
