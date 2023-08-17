@@ -529,6 +529,8 @@ get_mu.categorical <- function(obj) {
     alpha <- rstan::extract(obj$fit,
                             pars = alpha_names,
                             permute = FALSE)
+
+    alpha <- collapse_chains(alpha)
     
     nIter <- nrow(alpha)
 
