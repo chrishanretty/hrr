@@ -457,12 +457,18 @@ get_mu <- function(obj) {
 get_mu.binary <- function(obj) {
 
     param_names <- names(obj$fit)
-    alpha <- rstan::extract(obj$fit,
-                            pars = grep("Intercept_mu", param_names, value = TRUE))[[1]]
+    alpha_names <- grep("Intercept_mu",
+                        param_names,
+                        value = TRUE)
+    
+    alpha <- collapse_chains(rstan::extract(obj$fit,
+                            pars = alpha_names, permute = FALSE))
     
     ## Get continuous predictors
-    beta <- rstan::extract(obj$fit,
-                           pars = grep("^b_", param_names, value = TRUE))
+    beta_names <- grep("^b_", param_names, value = TRUE)
+    beta <- collapse_chains(rstan::extract(obj$fit,
+                                           pars = beta_names,
+                                           permute = FALSE))
     beta <- do.call("cbind", beta)
     
     ## Get categorical variables
@@ -472,11 +478,12 @@ get_mu.binary <- function(obj) {
     ncatvars <- max(as.numeric(the_rvar))
     cat_coefs <- list()
     for (i in 1:ncatvars) {
-        coefs <- rstan::extract(obj$fit,
-                                pars = grep(paste0("r_", i),
-                                            param_names,
-                                            value = TRUE))
-        cat_coefs[[i]] <- do.call("cbind", coefs)
+        cat_names <- grep(paste0("r_", i),
+                          param_names,
+                          value = TRUE)
+        coefs <- collapse_chains(rstan::extract(obj$fit,
+                                                pars = cat_names,
+                                                permute = FALSE))
     }
     
 ### Construct this using the stuff in the data object
@@ -498,15 +505,31 @@ get_mu.binary <- function(obj) {
 }
 
 
+collapse_chains <- function(x) {
+    matrix(x, ncol = dim(x)[3])
+}
+
 get_mu.categorical <- function(obj) {
     message("Getting predictions on latent scale (categorical)")
+
     param_names <- names(obj$fit)
 
-    ### Start with the intercept
-    alpha <- rstan::extract(obj$fit,
-                            pars = grep("Intercept_mu", param_names, value = TRUE))
-    alpha <- do.call("cbind", alpha)
+### Start with the intercept
+    alpha_names <- grep("Intercept_mu",
+                        param_names,
+                        value = TRUE)
 
+    ## ### Gives a list of two, one for each parameter
+    ## alpha <- rstan::extract(obj$fit,
+    ##                         pars = alpha_names)
+
+    ## ### two columns of nIter rows
+    ## alpha <- do.call("cbind", alpha)
+
+    alpha <- rstan::extract(obj$fit,
+                            pars = alpha_names,
+                            permute = FALSE)
+    
     nIter <- nrow(alpha)
 
 ### Start learning about the model we've got
@@ -530,8 +553,10 @@ get_mu.categorical <- function(obj) {
         matches <- grep(paste0("^b_mu", i),
                          param_names,
                          value = TRUE)
-        beta[[i]] <- do.call("cbind",
-                             rstan::extract(obj$fit, pars = matches))
+        beta[[i]] <- collapse_chains(
+                             rstan::extract(obj$fit,
+                                            pars = matches,
+                                            permute = FALSE))
     }
  
 ### Get categorical variables
@@ -553,8 +578,10 @@ get_mu.categorical <- function(obj) {
             matches <- grep(paste0("^r_", j, "_", i),
                             param_names,
                             value = TRUE)
-            tmp[[j]] <- do.call("cbind",
-                                rstan::extract(obj$fit, pars = matches))
+            tmp[[j]] <- collapse_chains(
+                rstan::extract(obj$fit,
+                               pars = matches,
+                               permute = FALSE))
         }
         eta[[i]] <- tmp
     }
