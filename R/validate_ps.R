@@ -21,7 +21,7 @@ validate_ps <- function(f, ps, areavar, weightvar) {
         constants <- paste(colnames(mf)[which(nvals == 1)], sep = ", ")
         errmsg <- paste0("Post-stratification data contains one or more constant variable(s): ",
                          constants)
-        stop(errmsg)
+        warning(errmsg)
     }
 
 ### Are all the variables factors (or coercible as such?)
