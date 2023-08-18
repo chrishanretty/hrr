@@ -281,7 +281,6 @@ fudge <- function(mu, obj, debug = FALSE) {
 
 ### whereas in the model, it's
 
-    if (do_iters) {
     for (i in seq_len(n_chains)) {
         for (j in dv_labels) {
             for (k in seq_len(n_areas)) {
@@ -305,7 +304,6 @@ fudge <- function(mu, obj, debug = FALSE) {
             }
             
         }
-    }
     }
     
     return(list(mod = obj, counts = counts))
