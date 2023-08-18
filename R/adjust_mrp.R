@@ -16,99 +16,60 @@ adjust_mrp <- function(obj, nthin = 25) {
 
 ### Thin everything down
     message("Thinning fit...")
-    obj$fit <- sub_sample(obj$fit, nthin, keep_warmup = FALSE)
-    
-### Get the the latent scale
-    mu <- get_mu(obj)
-
-    ### oldsup <- recreate_support(obj)
-### Get adjustment factors
-### About half an hour for 100 iters
+    obj$fit <- hrr:::sub_sample(obj$fit, nthin, keep_warmup = FALSE)
+    mu <- hrr:::get_mu(obj)
     message("Finding adjustment parameters...\n")
-    counts <- fudge(mu, obj)
-
-    counts <- data.frame(name = names(counts),
-                         count = counts,
-                         row.names = NULL)
-
+    counts <- custom_fudge(mu, obj)
+    new_obj <- counts$mod
+    counts <- counts$counts
+    counts <- data.frame(name = names(counts), count = counts, 
+        row.names = NULL)
     counts$var_idx <- sub("ps_J_([0-9]+).*", "\\1", counts$name)
-### This will not work for area counts
-    counts$var_idx[grepl("area_counts", counts$name)] <- length(obj$catlu) + 1
-    
+    counts$var_idx[grepl("area_counts", counts$name)] <- length(obj$catlu) + 
+        1
     counts$iter <- sub(".*_counts\\[([0-9]+),.*", "\\1", counts$name)
-    counts$var_level_idx <- sub(".*_counts\\[[0-9]+,([0-9]+),.*", "\\1", counts$name)
-
+    counts$var_level_idx <- sub(".*_counts\\[[0-9]+,([0-9]+),.*", 
+        "\\1", counts$name)
     counts$party <- sub(".*,([0-9]+)\\]$", "\\1", counts$name)
-
     counts$name <- NULL
     counts$var_idx <- as.numeric(counts$var_idx)
     counts$var_level_idx <- as.numeric(counts$var_level_idx)
     counts$iter <- as.numeric(counts$iter)
     counts$party <- as.numeric(counts$party)
-
-### Label these things
-### Add area to catlu
     catlu <- obj$catlu
-    catlu[[length(obj$catlu) + 1]] <- list(var = "area",
-                                           levels = obj$areas)
-
-    ### Name the variables
-    counts$var <- sapply(catlu, function(x)x[["var"]])[counts$var_idx]
+    catlu[[length(obj$catlu) + 1]] <- list(var = "area", levels = obj$areas)
+    counts$var <- sapply(catlu, function(x) x[["var"]])[counts$var_idx]
     counts$var_level <- ""
-
-    ### Name the variable levels
     for (i in 1:length(catlu)) {
-        counts$var_level[which(counts$var_idx == i)] <-
-            catlu[[i]]$levels[counts$var_level_idx[which(counts$var_idx == i)]]
+        counts$var_level[which(counts$var_idx == i)] <- catlu[[i]]$levels[counts$var_level_idx[which(counts$var_idx == 
+            i)]]
     }
-
-### Name the parties
     counts$y.value <- colnames(obj$data$aggy)[counts$party]
-
-### Remove the indices
     counts$var_idx <- NULL
     counts$var_level_idx <- NULL
-
-    ### counts.bak <- counts
-### Aggregate by iter, var, and var_level
-    ### Do this to create counts which we can merge back in
-    tots <- aggregate(counts$count,
-                      by = list(var = counts$var,
-                                iter = counts$iter,
-                                var_level = counts$var_level),
-                      sum)
-
+    
+    tots <- aggregate(counts$count, by = list(var = counts$var, 
+        iter = counts$iter, var_level = counts$var_level), sum)
     counts <- merge(counts, tots, all = TRUE)
-    counts$prop <- counts$count / counts$x
+    counts$prop <- counts$count/counts$x
     
-### Aggregate by var_name, var_level, y.value
-### summarizing with mean, sd, `2.5%`, `97.5%
-    out <- aggregate(prop ~ y.value + var + var_level,
-                     data = counts,
-                     FUN = function(x) c(meanval = mean(x),
-                                         sdval = sd(x),
-                                         lo = quantile(x, 0.025),
-                                         med = quantile(x, 0.5),
-                                         hi = quantile(x, 1 - 0.025)))
-
-    out <- cbind(out[,1:3], as.data.frame(out$prop))
-    names(out) <- c(names(out)[1:3],
-                    "mean", "sd", "2.5%", "50%", "97.5%")
-
-### Make sure the columns are correctly ordered
-    
-    area_smry <- out[out$var == "area",]
-    area_smry <- area_smry[,c("var_level", "y.value", "mean", "sd",
-                              "2.5%", "50%", "97.5%")]
+    out <- aggregate(prop ~ y.value + var + var_level, data = counts, 
+        FUN = function(x) c(meanval = mean(x), sdval = sd(x), 
+            lo = quantile(x, 0.025), med = quantile(x, 0.5), 
+            hi = quantile(x, 1 - 0.025)))
+    out <- cbind(out[, 1:3], as.data.frame(out$prop))
+    names(out) <- c(names(out)[1:3], "mean", "sd", "2.5%", "50%", 
+        "97.5%")
+    area_smry <- out[out$var == "area", ]
+    area_smry <- area_smry[, c("var_level", "y.value", "mean", 
+        "sd", "2.5%", "50%", "97.5%")]
     names(area_smry)[1] <- "area"
-    
-    grp_smry <- out[out$var != "area",]
-    grp_smry <- grp_smry[,c("var", "var_level", "y.value", "mean", "sd",
-                              "2.5%", "50%", "97.5%")]
+    grp_smry <- out[out$var != "area", ]
+    grp_smry <- grp_smry[, c("var", "var_level", "y.value", "mean", 
+        "sd", "2.5%", "50%", "97.5%")]
     names(grp_smry)[1] <- "var_name"
-    
-    return(list(area_smry = area_smry,
-                grp_smry = grp_smry))
+    return(list(obj = new_obj, area_smry = area_smry, grp_smry = grp_smry))
+
 }
 
 
@@ -182,266 +143,173 @@ get_inits <- function(obj) {
 }
 
 fudge <- function(mu, obj, debug = FALSE) {
-    
     param_names <- names(obj$fit)
     nIter <- nrow(mu)
-
-    nParties <- ifelse(is.na(dim(mu)[3]),
-                       2,
-                       1 + dim(mu)[3])
-
+    nParties <- ifelse(is.na(dim(mu)[3]), 2, 1 + dim(mu)[3])
     if (nParties == 2) {
         newmu <- array(0, dim = c(nrow(mu), ncol(mu), 1))
-        newmu[,,1] <- mu
+        newmu[, , 1] <- mu
         mu <- newmu
         rm(newmu)
     }
-    
-    stan_data <- list(nIter = nIter,
-                  nAreas = length(unique(obj$data$ps_area)),
-                  nParties = nParties,
-                  ps_N = obj$data$ps_N,
-                  ps_w8 = obj$data$ps_counts,
-                  area_idx = obj$data$ps_area,
-                  area_start = aggregate(1:obj$data$ps_N,
-                                  list(a = obj$data$ps_area),
-                                  min)[,"x"],
-                  area_stop = aggregate(1:obj$data$ps_N,
-                                  list(a = obj$data$ps_area),
-                                  max)[,"x"],
-                  aggy = obj$data$aggy,
-                  debug = as.numeric(debug))
-    
+    stan_data <- list(nIter = nIter, nAreas = length(unique(obj$data$ps_area)), 
+        nParties = nParties, ps_N = obj$data$ps_N, ps_w8 = obj$data$ps_counts, 
+        area_idx = obj$data$ps_area, area_start = aggregate(1:obj$data$ps_N, 
+            list(a = obj$data$ps_area), min)[, "x"], area_stop = aggregate(1:obj$data$ps_N, 
+            list(a = obj$data$ps_area), max)[, "x"], aggy = obj$data$aggy, 
+        debug = as.numeric(debug))
     stan_data$mu <- mu
-    
-    data_code <- "
-data {
-     int<lower=1>ps_N;
-     int<lower=0>ps_w8[ps_N];
-     int<lower=1>nAreas;
-     int<lower=2>nParties;
-     int<lower=1>nIter;
-     int<lower=0, upper = 1> debug;
-     int<lower=1, upper = nAreas> area_idx[ps_N];
-     int<lower=1, upper = ps_N> area_start[nAreas];
-     int<lower=1, upper = ps_N> area_stop[nAreas];
-     int<lower=0> aggy[nAreas, nParties];
-     real mu[nIter, ps_N, nParties - 1];
-
-"
-
-### Add on the number of categories for each entry
+    data_code <- "\ndata {\n     int<lower=1>ps_N;\n     int<lower=0>ps_w8[ps_N];\n     int<lower=1>nAreas;\n     int<lower=2>nParties;\n     int<lower=1>nIter;\n     int<lower=0, upper = 1> debug;\n     int<lower=1, upper = nAreas> area_idx[ps_N];\n     int<lower=1, upper = ps_N> area_start[nAreas];\n     int<lower=1, upper = ps_N> area_stop[nAreas];\n     int<lower=0> aggy[nAreas, nParties];\n     real mu[nIter, ps_N, nParties - 1];\n\n"
     for (i in 1:length(obj$catlu)) {
         addon_code <- paste0(" int<lower=1> N_", i, "; \n")
         data_code <- paste(data_code, addon_code)
-        stan_data[[paste0("N_", i)]] <- obj$data[[paste0("N_", i)]]
+        stan_data[[paste0("N_", i)]] <- obj$data[[paste0("N_", 
+            i)]]
     }
-
-### Add on the indices from the post-stratification frame
     for (i in 1:length(obj$catlu)) {
-        addon_code <- paste0(" int<lower=1, upper = N_", i, "> ps_J_", i, "[ps_N]; \n")
+        addon_code <- paste0(" int<lower=1, upper = N_", i, "> ps_J_", 
+            i, "[ps_N]; \n")
         data_code <- paste(data_code, addon_code)
-        stan_data[[paste0("ps_J_", i)]] <- obj$data[[paste0("ps_J_", i)]]
+        stan_data[[paste0("ps_J_", i)]] <- obj$data[[paste0("ps_J_", 
+            i)]]
     }
-### Add on the closing bracket
     data_code <- paste0(data_code, "\n}\n")
-    
-stan_code <- "
-parameters {
-     real global_adj[nParties - 1];
-     real area_adj[nAreas, nParties - 1];
-     real adj[nIter, nAreas, nParties - 1];
-}
-transformed parameters {
-    real<lower=0> theta[nIter, nAreas, nParties]; // counts and proportions 
-    real newmu[nIter, ps_N, nParties];
-
-    // Create the adjusted mu (newmu)
-    for (i in 1:nIter) {
-       for (j in 1:ps_N) {
-
-          newmu[i, j, 1] = 0; // zero for the reference parties
-          for (k in 2:nParties) { 
-             newmu[i, j, k] = mu[i, j, k-1] +
-                global_adj[k-1] +
-                area_adj[area_idx[j], k-1] +
-                adj[i, area_idx[j], k-1];
-          }
-
-          newmu[i, j, 1:nParties] = to_array_1d(softmax(to_vector(newmu[i, j, 1:nParties])));
-       }
-    }
-
-    // Aggregate for different slices
-    for (i in 1:nIter) { 
-       for (j in 1:nAreas) {
-          int start = area_start[j];
-          int stop = area_stop[j];
-          // initialize
-	  for (k in 1:nParties) {
-   	     theta[i, j, k] = 0.0;
-   	     for (m in start:stop) {
-	        theta[i, j, k] += ps_w8[m] .* newmu[i, m, k];
-             }
-          }
-       }
-    }
-
-    // Transform theta to simplex
-    for (i in 1:nIter){
-     for (j in 1:nAreas) {
-       real thetasum = sum(theta[i,j,1:nParties]);
-       for (k in 1:nParties) { 
-         theta[i,j,k] = theta[i,j,k] / thetasum;
-       }
-     }
-    }
-       
-       
-}
-model {
-   to_vector(global_adj) ~ normal(0, 2.5);
-   for (i in 1:nIter) {
-      for (j in 1:nAreas) {
-         to_vector(adj[i, j, ]) ~ std_normal();
-         aggy[j, ] ~ multinomial(to_vector(theta[i, j, ]));
-      }
-   }
-   for (j in 1:nAreas) {
-      to_vector(area_adj[j,]) ~ std_normal();
-   }
-}
-"
-### Add on to the stan code
-    ## We'll cannibalize the code from the object
-    genquant_code <- "
-generated quantities {
-int<lower=0>pr[nIter, ps_N, nParties];
-"
-    ### Set-up count objects
+    stan_code <- "\nparameters {\n     real global_adj[nParties - 1];\n     real area_adj[nAreas, nParties - 1];\n     real adj[nIter, nAreas, nParties - 1];\n}\ntransformed parameters {\n    real<lower=0> theta[nIter, nAreas, nParties]; // counts and proportions \n    real newmu[nIter, ps_N, nParties];\n\n    // Create the adjusted mu (newmu)\n    for (i in 1:nIter) {\n       for (j in 1:ps_N) {\n\n          newmu[i, j, 1] = 0; // zero for the reference parties\n          for (k in 2:nParties) { \n             newmu[i, j, k] = mu[i, j, k-1] +\n                global_adj[k-1] +\n                area_adj[area_idx[j], k-1] +\n                adj[i, area_idx[j], k-1];\n          }\n\n          newmu[i, j, 1:nParties] = to_array_1d(softmax(to_vector(newmu[i, j, 1:nParties])));\n       }\n    }\n\n    // Aggregate for different slices\n    for (i in 1:nIter) { \n       for (j in 1:nAreas) {\n          int start = area_start[j];\n          int stop = area_stop[j];\n          // initialize\n\t  for (k in 1:nParties) {\n   \t     theta[i, j, k] = 0.0;\n   \t     for (m in start:stop) {\n\t        theta[i, j, k] += ps_w8[m] .* newmu[i, m, k];\n             }\n          }\n       }\n    }\n\n    // Transform theta to simplex\n    for (i in 1:nIter){\n     for (j in 1:nAreas) {\n       real thetasum = sum(theta[i,j,1:nParties]);\n       for (k in 1:nParties) { \n         theta[i,j,k] = theta[i,j,k] / thetasum;\n       }\n     }\n    }\n       \n       \n}\nmodel {\n   to_vector(global_adj) ~ normal(0, 2.5);\n   for (i in 1:nIter) {\n      for (j in 1:nAreas) {\n         to_vector(adj[i, j, ]) ~ std_normal();\n         aggy[j, ] ~ multinomial(to_vector(theta[i, j, ]));\n      }\n   }\n   for (j in 1:nAreas) {\n      to_vector(area_adj[j,]) ~ std_normal();\n   }\n}\n"
+    genquant_code <- "\ngenerated quantities {\nint<lower=0>pr[nIter, ps_N, nParties];\n"
     for (i in 1:length(obj$catlu)) {
-        addon_code <- paste0(" int<lower=0> ps_J_", i, "_counts[nIter, N_", i, ", nParties]; \n")
+        addon_code <- paste0(" int<lower=0> ps_J_", i, "_counts[nIter, N_", 
+            i, ", nParties]; \n")
         genquant_code <- paste0(genquant_code, addon_code)
     }
     addon_code <- " int<lower=0> ps_area_counts[nIter, nAreas, nParties]; \n"
     genquant_code <- paste0(genquant_code, addon_code)
-
-### Start initializing all these
     for (i in 1:length(obj$catlu)) {
-        addon_code <- paste0("for (i in 1:nIter) {
-   for (j in 1:N_", i, ") {
-      for (k in 1:nParties) {
-         ps_J_", i, "_counts[i, j, k] = 0;
-      }
-   }
-}\n\n")
+        addon_code <- paste0("for (i in 1:nIter) {\n   for (j in 1:N_", 
+            i, ") {\n      for (k in 1:nParties) {\n         ps_J_", 
+            i, "_counts[i, j, k] = 0;\n      }\n   }\n}\n\n")
         genquant_code <- paste0(genquant_code, addon_code)
     }
-    
-### Initialize area
-    addon_code <- "
-for (i in 1:nIter) {
-   for (j in 1:nAreas) {
-      for (k in 1:nParties) {
-         ps_area_counts[i, j, k] = 0;
-      }
-   }
-}
-
-"
-
+    addon_code <- "\nfor (i in 1:nIter) {\n   for (j in 1:nAreas) {\n      for (k in 1:nParties) {\n         ps_area_counts[i, j, k] = 0;\n      }\n   }\n}\n\n"
     genquant_code <- paste0(genquant_code, addon_code)
-
-### Create predicted counts
-    addon_code <- "
-    for (i in 1:nIter) {
-        for (p in 1:ps_N) {
-            pr[i,p, 1:nParties] = multinomial_rng(to_vector(newmu[i, p, ]), ps_w8[p]);
-        }
-    }
-    "
+    addon_code <- "\n    for (i in 1:nIter) {\n        for (p in 1:ps_N) {\n            pr[i,p, 1:nParties] = multinomial_rng(to_vector(newmu[i, p, ]), ps_w8[p]);\n        }\n    }\n    "
     genquant_code <- paste0(genquant_code, addon_code)
-    
-### Start adding predicted counts on
     for (i in 1:length(obj$catlu)) {
-        addon_code <- paste0("
-for (i in 1:nIter) {
-   for (p in 1:ps_N) {
-      for (k in 1:nParties) { 
-         ps_J_", i, "_counts[i, ps_J_", i, "[p],k] = ps_J_", i, "_counts[i, ps_J_", i, "[p],k] + pr[i, p, k];
-      }
-   }
-}
-
-")
+        addon_code <- paste0("\nfor (i in 1:nIter) {\n   for (p in 1:ps_N) {\n      for (k in 1:nParties) { \n         ps_J_", 
+            i, "_counts[i, ps_J_", i, "[p],k] = ps_J_", i, "_counts[i, ps_J_", 
+            i, "[p],k] + pr[i, p, k];\n      }\n   }\n}\n\n")
         genquant_code <- paste0(genquant_code, addon_code)
     }
-
-### Do area counts
-      addon_code <- paste0("
-for (i in 1:nIter) {
-   for (p in 1:ps_N) {
-      for (k in 1:nParties) { 
-         ps_area_counts[i, area_idx[p],k] = ps_area_counts[i, area_idx[p],k] + pr[i, p, k];
-      }
-   }
-}
-
-")
-
+    addon_code <- paste0("\nfor (i in 1:nIter) {\n   for (p in 1:ps_N) {\n      for (k in 1:nParties) { \n         ps_area_counts[i, area_idx[p],k] = ps_area_counts[i, area_idx[p],k] + pr[i, p, k];\n      }\n   }\n}\n\n")
     genquant_code <- paste0(genquant_code, addon_code)
-
-### Closing bracket!
     genquant_code <- paste0(genquant_code, "\n\n}\n\n")
-    stan_code <- paste0(data_code,
-                        stan_code,
-                        genquant_code)
-    
-
-
+    stan_code <- paste0(data_code, stan_code, genquant_code)
     sm <- rstan::stan_model(model_code = stan_code)
-
-### Build the parameter list
-    ## Oh no, optimizing doesn't support pars!
-    ## pars <- c(paste0("ps_J_", 1:length(obj$catlu), "_counts"),
-    ##           "ps_area_counts")
-    so <- rstan::optimizing(sm,
-                            data = stan_data,
-                            verbose = FALSE,
-                            init = get_inits(obj))
-
+    so <- rstan::optimizing(sm, data = stan_data, verbose = FALSE, 
+        init = hrr:::get_inits(obj))
     if (debug) {
         theta <- so$par[grep("theta", names(so$par))]
-        theta <- array(theta,
-                       dim = c(stan_data$nIter,
-                               stan_data$nAreas,
-                               stan_data$nParties))
-### Compare this to actual
-        aggy <- stan_data$aggy / rowSums(stan_data$aggy)
+        theta <- array(theta, dim = c(stan_data$nIter, stan_data$nAreas, 
+            stan_data$nParties))
+        aggy <- stan_data$aggy/rowSums(stan_data$aggy)
         rmse_holder <- list()
         for (i in 1:stan_data$nIter) {
-            rmse_holder[[i]] <- sqrt(mean((theta[i, , ] - as.matrix(aggy)) ^ 2))
+            rmse_holder[[i]] <- sqrt(mean((theta[i, , ] - as.matrix(aggy))^2))
         }
-        pr <- so$par[grep("^pr", names(so$par))]        
+        pr <- so$par[grep("^pr", names(so$par))]
     }
-    
-
     if (so$return_code > 0) {
         stop("L-BFGS optimization failed: try thinning more")
         message("LBFGS optimization failed, trying Newton")
-        so <- rstan::optimizing(sm,
-                                algorithm = "Newton",
-                                data = stan_data,
-                                init = 0)
+        so <- rstan::optimizing(sm, algorithm = "Newton", data = stan_data, 
+            init = 0)
     }
-
-### Get the different supports
     counts <- grep("_counts\\[", names(so$par))
     counts <- so$par[counts]
-    return(counts)
 
+    n_chains <- length(obj$fit@stan_args)
+    ## pars <- so$par
+### Get the global adjustment, add it on to all intercepts
+
+    ### 
+    global_adj <- grep("global_adj\\[", names(so$par))
+    global_adj <- so$par[global_adj]
+    dv_labels <- colnames(obj$data$aggy)[-1]
+    intercept_labels <- paste0("Intercept_mu", dv_labels)
+    for (i in 1:n_chains) {
+        for (j in intercept_labels) {
+            inc <- global_adj[which(intercept_labels == j)]
+            obj$fit@sim$samples[[i]][[j]] <- obj$fit@sim$samples[[i]][[j]] + inc
+        }
+    }
+    
+
+### Get the area adjustments and add them on
+    area_adj <- grep("area_adj\\[", names(so$par))
+    area_adj <- so$par[area_adj]
+### The area parameters are of the form area_adj[area, dep. var. level]
+    ## whereas in the model obj, it's r_[nREs]_[dep. var. level][area]
+    ## such that if you have three random effects and then area REs
+    ## and if your dep vars and green and red, it might be
+    ## r_4_green[6]
+    area_re_counter <- length(obj$catlu) + 1
+    n_areas <- nrow(obj$data$aggy)
+    for (i in seq_len(n_chains)) {
+        for (j in dv_labels) {
+            for (k in seq_len(n_areas)) {
+                inc <- area_adj[paste0("area_adj[", k, ",", j, "]")]
+                tgt_var <- paste0("r_",
+                                  area_re_counter,
+                                  "_",
+                                  j,
+                                  "[",
+                                  k,
+                                  "]")
+                obj$fit@sim$samples[[i]][[tgt_var]] <- obj$fit@sim$samples[[i]][[tgt_var]]
+                + inc
+            }
+            
+        }
+    }
+    
+### Get the area-by-iter adjustments
+### Urgh, this is going to be horrible
+### The area-by-iter parameters are of the form
+    iter_adj <- grep("^adj\\[", names(so$par))
+    iter_adj <- so$par[iter_adj]
+
+### adj[iter, area, dep. var. level]
+
+### whereas in the model, it's
+
+    if (do_iters) {
+    for (i in seq_len(n_chains)) {
+        for (j in dv_labels) {
+            for (k in seq_len(n_areas)) {
+                regexp <- paste0(",", k, ",", which(dv_labels == j), "]")
+                inc <- iter_adj[grep(regexp, names(iter_adj))]
+### This gives us a vector of length nIter * nChains
+                corresponding_chain <- rep(1:n_chains, each = length(inc) / n_chains)
+                inc <- inc[which(corresponding_chain == i)]
+                tgt_var <- paste0("r_",
+                                  area_re_counter,
+                                  "_",
+                                  j,
+                                  "[",
+                                  k,
+                                  "]")
+                if (length(inc) != length(obj$fit@sim$samples[[i]][[tgt_var]])) {
+                    stop("Got lengths mixed up")
+                }
+                
+                obj$fit@sim$samples[[i]][[tgt_var]] <- obj$fit@sim$samples[[i]][[tgt_var]] + inc
+            }
+            
+        }
+    }
+    }
+    
+    return(list(mod = obj, counts = counts))
 }
-
 
 
 get_mu <- function(obj) {
