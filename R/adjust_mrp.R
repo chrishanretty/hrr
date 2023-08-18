@@ -19,7 +19,7 @@ adjust_mrp <- function(obj, nthin = 25) {
     obj$fit <- hrr:::sub_sample(obj$fit, nthin, keep_warmup = FALSE)
     mu <- hrr:::get_mu(obj)
     message("Finding adjustment parameters...\n")
-    counts <- custom_fudge(mu, obj)
+    counts <- fudge(mu, obj)
     new_obj <- counts$mod
     counts <- counts$counts
     counts <- data.frame(name = names(counts), count = counts, 
