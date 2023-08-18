@@ -63,8 +63,14 @@ make_stan_data <- function(f, data, ps, aux, res, areavar, weightvar, threading,
 
 
 ### Add on the final area categorical predictor
+### Number of areas is defined specially
+    n_areas <- intersect(as.character(aux[, areavar]),
+                         as.character(ps[, areavar])) |>
+        unique() |>
+        length()
+
     i <- ncatvars + 1
-    stan_data[[paste0("N_", i)]] <- length(unique(data[, areavar]))
+    stan_data[[paste0("N_", i)]] <- n_areas
     stan_data[[paste0("J_", i)]] <- data[, areavar]
     
 ### Prior_only argument
