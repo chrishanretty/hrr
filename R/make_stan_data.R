@@ -35,10 +35,11 @@ make_stan_data <- function(f, data, ps, aux, res, areavar, weightvar, threading,
     areapos_start <- tapply(rowno, ps[, areavar], min)
     areapos_stop <- tapply(rowno, ps[, areavar], max)
 
-    stan_data$ps_area <- ps[, areavar]
+    ### 
+    stan_data$ps_area <- as.integer(ps[, areavar])
     stan_data$ps_counts <- ps[, weightvar]
-    stan_data$areastart <- areapos_start
-    stan_data$areastop <- areapos_stop
+    stan_data$areastart <- as.integer(areapos_start)
+    stan_data$areastop <- as.integer(areapos_stop)
 
 ### Results
     stan_data$aggy <- res[, levels(data[, depvar])]
@@ -58,7 +59,7 @@ make_stan_data <- function(f, data, ps, aux, res, areavar, weightvar, threading,
 
     for (i in 1:ncatvars) {
         stan_data[[paste0("N_", i)]] <- length(unique(ps[, ind_predictors[i]]))
-        stan_data[[paste0("J_", i)]] <- data[, ind_predictors[i]]
+        stan_data[[paste0("J_", i)]] <- as.integer(data[, ind_predictors[i]])
     }
 
 
@@ -71,7 +72,7 @@ make_stan_data <- function(f, data, ps, aux, res, areavar, weightvar, threading,
 
     i <- ncatvars + 1
     stan_data[[paste0("N_", i)]] <- n_areas
-    stan_data[[paste0("J_", i)]] <- data[, areavar]
+    stan_data[[paste0("J_", i)]] <- as.integer(data[, areavar])
     
 ### Prior_only argument
     if ("prior_only" %in% names(dots)) {
@@ -89,11 +90,11 @@ make_stan_data <- function(f, data, ps, aux, res, areavar, weightvar, threading,
 
 ### Post-stratification categorical variables
     for (i in 1:ncatvars) {
-        stan_data[[paste0("ps_J_", i)]] <- ps[,ind_predictors[i]]
+        stan_data[[paste0("ps_J_", i)]] <- as.integer(ps[,ind_predictors[i]])
     }
 
     i <- ncatvars + 1
-    stan_data[[paste0("ps_J_", i)]] <- ps[,areavar]
+    stan_data[[paste0("ps_J_", i)]] <- as.integer(ps[,areavar])
 
 ### Return everything    
     return(stan_data)
