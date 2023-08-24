@@ -4,6 +4,11 @@ postprocess <- function(obj, f, data, ps, areavar, weightvar, catlu, probs = c(0
     retval <- list()
     retval$fit <- fit
 
+    if (inherits(fit, "stanfit")) { 
+        s <- rstan::summary(fit, probs = probs)
+    } else {
+        stop("Post-processing cmdstanr objects not yet supported")
+    }
     
 ### ##################    
 ### (1) Area
@@ -11,13 +16,13 @@ postprocess <- function(obj, f, data, ps, areavar, weightvar, catlu, probs = c(0
     
     if (inherits(fit, "stanfit")) {
         print("Summarizing...")
-        area_smry <- rstan::summary(fit, probs = probs)
+        area_smry <- s
         area_smry <- area_smry$summary
         area_smry <- as.data.frame(area_smry)
         area_smry$param <- rownames(area_smry)
         rownames(area_smry) <- NULL
     } else {
-        stop("Post-processing cmdstanr objects not yet supported")
+        
     }
     area_smry <- area_smry[grepl("ps_area_counts", area_smry$param), ]
     area_smry$area_idx <- sub(".*\\[(.*),.*", "\\1", area_smry$param)
@@ -61,7 +66,7 @@ postprocess <- function(obj, f, data, ps, areavar, weightvar, catlu, probs = c(0
 ### (2) Characteristics
 ### ###################
     if (inherits(fit, "stanfit")) { 
-        grp_smry <- rstan::summary(fit, probs = probs)
+        grp_smry <- s
         grp_smry <- grp_smry$summary
         grp_smry <- as.data.frame(grp_smry)
         grp_smry$param <- rownames(grp_smry)
@@ -130,7 +135,7 @@ postprocess <- function(obj, f, data, ps, areavar, weightvar, catlu, probs = c(0
 ### We need to get the coefficients
 ###
     if (inherits(fit, "stanfit")) { 
-        coef_smry <- rstan::summary(fit, probs = probs)
+        coef_smry <- s
         coef_smry <- coef_smry$summary
         coef_smry <- as.data.frame(coef_smry)
         coef_smry$param <- rownames(coef_smry)
