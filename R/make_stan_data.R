@@ -30,7 +30,7 @@ make_stan_data <- function(f, data, ps, aux, res, areavar, weightvar, threading,
     if (any(mp == 0)) {
         stop("Error matching auxiliary and post-strat areavars")
     }
-    if (any(is.na(mp)) {
+    if (any(is.na(mp))) {
         stop("Error matching auxiliary and post-strat areavars")
     }
     
