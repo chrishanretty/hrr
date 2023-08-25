@@ -45,6 +45,9 @@ validate_ps <- function(f, ps, areavar, weightvar) {
     if (any(ps[,weightvar] <= 0)) {
         stop("Post-stratification cell counts in `weightvar` must be strictly greater than zero")
     }
+    if (any(round(ps[,weightvar]) != ps[,weightvar])) {
+        stop("Post-stratification cell counts in `weightvar` must be integers")
+    }
     ### Coerce 
     
 ### Select only the relevant variables
