@@ -42,7 +42,9 @@ validate_ps <- function(f, ps, areavar, weightvar) {
     if (!is.numeric(ps[,weightvar])) {
         stop("Post-stratification cell counts in `weightvar` are not numeric")
     }
-
+    if (any(ps[,weightvar] <= 0)) {
+        stop("Post-stratification cell counts in `weightvar` must be strictly greater than zero")
+    }
     ### Coerce 
     
 ### Select only the relevant variables
