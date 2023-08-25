@@ -24,7 +24,17 @@ make_stan_data <- function(f, data, ps, aux, res, areavar, weightvar, threading,
         stop("Auxiliary data can't be re-ordered to match values of areavar in data")
     }
 
-    X <- aux[auxmatchpos, ]
+    X <- aux
+### Make sure aux is ordered according to the levels of the ps[,areavar]
+    mp <- match(levels(ps[,areavar]), aux[,areavar])
+    if (any(mp == 0)) {
+        stop("Error matching auxiliary and post-strat areavars")
+    }
+    if (any(is.na(mp)) {
+        stop("Error matching auxiliary and post-strat areavars")
+    }
+    
+    X <- X[,]
     mm <- model.matrix(areapreds, data = X)[, -1]
     stan_data$K_X <- ncol(mm)
     stan_data$X <- mm

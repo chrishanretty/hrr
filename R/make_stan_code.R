@@ -308,6 +308,9 @@ make_data_code <- function(f, data, ps, aux) {
     code <- paste0(code,
                    " int<lower=1> N; // total number of observations\n")
 
+    code <- paste0(code,
+                   " int nAreas; \n")
+    
 ### Dependent variable
     depvar_type <- get_depvar_type(f, data)
 
@@ -335,7 +338,7 @@ make_data_code <- function(f, data, ps, aux) {
                    " int<lower=1> K_X;  // number of population-level effects\n")
 
     code <- paste0(code,
-                   " matrix[N, K_X] X;  // population-level design matrix\n")
+                   " matrix[nAreas, K_X] X;  // population-level design matrix\n")
 
     code <- paste0(code,
                    "  int grainsize;  // grainsize for threading\n")
@@ -359,8 +362,8 @@ make_data_code <- function(f, data, ps, aux) {
     code <- paste0(code,
                    " int<lower=1> ps_N; \n")
 
-    code <- paste0(code,
-                   " matrix[ps_N, K_X] ps_X;  // \n")    
+    ## code <- paste0(code,
+    ##                " matrix[ps_N, K_X] ps_X;  // \n")    
 
     for(i in 1:(ncatvars+1)) {
         addon <- paste0(" int<lower=1, upper=N_", i, "> ps_J_", i,
@@ -370,7 +373,7 @@ make_data_code <- function(f, data, ps, aux) {
     }
 
     code <- paste0(code,
-                   " int nAreas;\n int<lower=1,upper=ps_N> areastart[nAreas];\n int<lower=2,upper=ps_N> areastop[nAreas];\n")
+                   "\n int<lower=1,upper=ps_N> areastart[nAreas];\n int<lower=2,upper=ps_N> areastop[nAreas];\n")
 
     code <- paste0(code,
                    " int<lower=1, upper=nAreas> ps_area[ps_N];\n")
@@ -415,14 +418,12 @@ get_depvar_type <- function(f, data) {
 
 make_tdata_code <- function(f, data, ps, aux) {
     code <- "transformed data {
- matrix[N, K_X] Xc;  // centered version of X
+ matrix[nAreas, K_X] Xc;  // centered version of X
  vector[K_X] means_X;  // column means of X
  int seq[N] = sequence(1, N);
- matrix[ps_N, K_X] ps_Xc;  // centered version of ps_X
  for (i in 1:K_X) {
     means_X[i] = mean(X[, i]);
     Xc[, i] = X[, i] - means_X[i];
-    ps_Xc[, i] = ps_X[, i] - means_X[i];
   }
 }"
     return(code)
@@ -656,7 +657,10 @@ make_model_code <- function(f, data, ps, aux, res, adjust, overdispersed, thread
                        " target += reduce_sum(partial_log_lik, seq, grainsize, ncat, Y, Xc, ")
     } else {
         code <- paste0(code,
-                       " target += partial_log_lik(sequence(1, N), 1, N, ncat, Y, Xc, ")
+                       " target += partial_log_lik(sequence(1, N), 1, N, ncat, Y, ")
+
+        ### permute the Xc matrix according to the J_[Area] variable
+        code <- paste0(code, "Xc[J_", ncatvars + 1, ", ], ")
     }
     
 
@@ -810,7 +814,11 @@ make_genquant_code <- function(f, data, ps, aux, adjust) {
     }
 
     code <- paste0(code,
-                   "i, i, ncat, Y, ps_Xc, ")
+                   "i, i, ncat, Y, ")
+
+### permute the Xc matrix according to the area
+    code <- paste0(code,
+                   "Xc[ps_J_", ncatvars + 1, ", ], ")
 
     for (d in dv_levels[-1]) {
         code <- paste0(code, "\n")
