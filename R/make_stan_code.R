@@ -434,7 +434,7 @@ make_tdata_code <- function(f, data, ps, aux) {
                    paste0("X_ind = X[J_", ncatvars+1, ",];
 
 
-}"))
+"))
     code <- paste0(code,
 "
 for (i in 1:K_X) {
