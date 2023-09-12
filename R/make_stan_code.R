@@ -420,12 +420,20 @@ make_tdata_code <- function(f, data, ps, aux) {
     code <- "transformed data {
  matrix[nAreas, K_X] Xc;  // centered version of X
  vector[K_X] means_X;  // column means of X
+ matrix[N, K_X] Xc_ind;
+ matrix[ps_N, K_X] Xc_ps; 
  int seq[N] = sequence(1, N);
  for (i in 1:K_X) {
     means_X[i] = mean(X[, i]);
     Xc[, i] = X[, i] - means_X[i];
   }
-}"
+  Xc_ps = Xc[ps_area,];
+"
+    code <- paste0(code,
+                   paste0("Xc_ind = Xc[J_", ncatvars+1, ",];
+
+
+}"))
     return(code)
 }
 
@@ -578,7 +586,7 @@ make_tparams_code <- function(f, data, ps, aux, adjust, overdispersed, mrp_only)
                        "areastart[i], areastop[i], ncat, Y, ")
 
         code <- paste0(code,
-                       "ps_Xc, ")
+                       "Xc_ps, ")
 
         for(d in dv_levels[-1]) {
             addon <- paste0(" b_mu", d, ", ")
@@ -654,13 +662,13 @@ make_model_code <- function(f, data, ps, aux, res, adjust, overdispersed, thread
 
     if (threading) { 
         code <- paste0(code,
-                       " target += reduce_sum(partial_log_lik, seq, grainsize, ncat, Y, Xc, ")
+                       " target += reduce_sum(partial_log_lik, seq, grainsize, ncat, Y, Xc_ind, ")
     } else {
         code <- paste0(code,
-                       " target += partial_log_lik(sequence(1, N), 1, N, ncat, Y, ")
+                       " target += partial_log_lik(sequence(1, N), 1, N, ncat, Y, Xc_ind, ")
 
-        ### permute the Xc matrix according to the J_[Area] variable
-        code <- paste0(code, "Xc[J_", ncatvars + 1, ", ], ")
+        ## ### permute the Xc matrix according to the J_[Area] variable
+        ## code <- paste0(code, "Xc[J_", ncatvars + 1, ", ], ")
     }
     
 
