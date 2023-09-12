@@ -417,6 +417,10 @@ get_depvar_type <- function(f, data) {
 }
 
 make_tdata_code <- function(f, data, ps, aux) {
+    ind_predictors <- terms(f, lhs = FALSE, rhs = c(TRUE, FALSE))
+    ind_predictors <- all.vars(ind_predictors)
+
+    ncatvars <- length(ind_predictors)
     code <- "transformed data {
  matrix[nAreas, K_X] Xc;  // centered version of X
  vector[K_X] means_X;  // column means of X
