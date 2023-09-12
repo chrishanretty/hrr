@@ -424,20 +424,24 @@ make_tdata_code <- function(f, data, ps, aux) {
     code <- "transformed data {
  matrix[nAreas, K_X] Xc;  // centered version of X
  vector[K_X] means_X;  // column means of X
+ matrix[N, K_X] X_ind;
  matrix[N, K_X] Xc_ind;
  matrix[ps_N, K_X] Xc_ps; 
  int seq[N] = sequence(1, N);
- for (i in 1:K_X) {
-    means_X[i] = mean(X[, i]);
-    Xc[, i] = X[, i] - means_X[i];
-  }
   Xc_ps = Xc[ps_area,];
 "
     code <- paste0(code,
-                   paste0("Xc_ind = Xc[J_", ncatvars+1, ",];
+                   paste0("X_ind = X[J_", ncatvars+1, ",];
 
 
 }"))
+    code <- paste0(code,
+"
+for (i in 1:K_X) {
+    means_X[i] = mean(Xind[, i]);
+    Xc_ind[, i] = X_ind[, i] - means_X[i];
+  }
+")
     return(code)
 }
 
