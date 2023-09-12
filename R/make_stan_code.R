@@ -438,7 +438,7 @@ make_tdata_code <- function(f, data, ps, aux) {
     code <- paste0(code,
 "
 for (i in 1:K_X) {
-    means_X[i] = mean(Xind[, i]);
+    means_X[i] = mean(X_ind[, i]);
     Xc_ind[, i] = X_ind[, i] - means_X[i];
   }
 }
