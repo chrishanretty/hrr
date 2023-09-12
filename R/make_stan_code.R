@@ -338,7 +338,7 @@ make_data_code <- function(f, data, ps, aux) {
                    " int<lower=1> K_X;  // number of population-level effects\n")
 
     code <- paste0(code,
-                   " matrix[nAreas, K_X] X;  // population-level design matrix\n")
+                   " matrix[N, K_X] X;  // population-level design matrix\n")
 
     code <- paste0(code,
                    "  int grainsize;  // grainsize for threading\n")
@@ -362,8 +362,8 @@ make_data_code <- function(f, data, ps, aux) {
     code <- paste0(code,
                    " int<lower=1> ps_N; \n")
 
-    ## code <- paste0(code,
-    ##                " matrix[ps_N, K_X] ps_X;  // \n")    
+    code <- paste0(code,
+                   " matrix[ps_N, K_X] ps_X;  // \n")    
 
     for(i in 1:(ncatvars+1)) {
         addon <- paste0(" int<lower=1, upper=N_", i, "> ps_J_", i,
@@ -422,24 +422,17 @@ make_tdata_code <- function(f, data, ps, aux) {
 
     ncatvars <- length(ind_predictors)
     code <- "transformed data {
- matrix[nAreas, K_X] Xc;  // centered version of X
+ matrix[N, K_X] Xc;  // centered version of X
+ matrix[ps_N, K_X] ps_Xc;  // centered version of ps_X
  vector[K_X] means_X;  // column means of X
- matrix[N, K_X] X_ind;
- matrix[N, K_X] Xc_ind;
- matrix[ps_N, K_X] Xc_ps; 
  int seq[N] = sequence(1, N);
-  Xc_ps = Xc[ps_area,];
 "
-    code <- paste0(code,
-                   paste0("X_ind = X[J_", ncatvars+1, ",];
-
-
-"))
     code <- paste0(code,
 "
 for (i in 1:K_X) {
-    means_X[i] = mean(X_ind[, i]);
-    Xc_ind[, i] = X_ind[, i] - means_X[i];
+    means_X[i] = mean(X[, i]);
+    Xc[, i] = X[, i] - means_X[i];
+    ps_Xc[, i] = ps_X[, i] - means_X[i];
   }
 }
 ")
@@ -595,7 +588,7 @@ make_tparams_code <- function(f, data, ps, aux, adjust, overdispersed, mrp_only)
                        "areastart[i], areastop[i], ncat, Y, ")
 
         code <- paste0(code,
-                       "Xc_ps, ")
+                       "ps_Xc, ")
 
         for(d in dv_levels[-1]) {
             addon <- paste0(" b_mu", d, ", ")
@@ -671,13 +664,10 @@ make_model_code <- function(f, data, ps, aux, res, adjust, overdispersed, thread
 
     if (threading) { 
         code <- paste0(code,
-                       " target += reduce_sum(partial_log_lik, seq, grainsize, ncat, Y, Xc_ind, ")
+                       " target += reduce_sum(partial_log_lik, seq, grainsize, ncat, Y, Xc, ")
     } else {
         code <- paste0(code,
-                       " target += partial_log_lik(sequence(1, N), 1, N, ncat, Y, Xc_ind, ")
-
-        ## ### permute the Xc matrix according to the J_[Area] variable
-        ## code <- paste0(code, "Xc[J_", ncatvars + 1, ", ], ")
+                       " target += partial_log_lik(sequence(1, N), 1, N, ncat, Y, Xc, ")
     }
     
 
@@ -833,9 +823,8 @@ make_genquant_code <- function(f, data, ps, aux, adjust) {
     code <- paste0(code,
                    "i, i, ncat, Y, ")
 
-### permute the Xc matrix according to the area
     code <- paste0(code,
-                   "Xc[ps_J_", ncatvars + 1, ", ], ")
+                   "ps_Xc, ")
 
     for (d in dv_levels[-1]) {
         code <- paste0(code, "\n")
