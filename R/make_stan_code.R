@@ -441,6 +441,7 @@ for (i in 1:K_X) {
     means_X[i] = mean(Xind[, i]);
     Xc_ind[, i] = X_ind[, i] - means_X[i];
   }
+}
 ")
     return(code)
 }
