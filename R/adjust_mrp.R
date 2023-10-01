@@ -204,8 +204,9 @@ fudge <- function(mu, obj, debug = FALSE) {
     genquant_code <- paste0(genquant_code, "\n\n}\n\n")
     stan_code <- paste0(data_code, stan_code, genquant_code)
     sm <- rstan::stan_model(model_code = stan_code)
-    so <- rstan::optimizing(sm, data = stan_data, verbose = FALSE, 
-        init = hrr:::get_inits(obj))
+    so <- try(rstan::optimizing(sm, data = stan_data, verbose = FALSE, 
+                                init = hrr:::get_inits(obj)))
+    
     if (debug) {
         theta <- so$par[grep("theta", names(so$par))]
         theta <- array(theta, dim = c(stan_data$nIter, stan_data$nAreas, 
@@ -217,9 +218,9 @@ fudge <- function(mu, obj, debug = FALSE) {
         }
         pr <- so$par[grep("^pr", names(so$par))]
     }
-    if (so$return_code > 0) {
-        stop("L-BFGS optimization failed: try thinning more")
-        message("LBFGS optimization failed, trying Newton")
+    if (inherits(so, "try-error") | (so$return_code > 0) {
+        ### stop("L-BFGS optimization failed: try thinning more")
+        message("LBFGS optimization failed, trying Newton with zero inits")
         so <- rstan::optimizing(sm, algorithm = "Newton", data = stan_data, 
             init = 0)
     }
@@ -227,6 +228,7 @@ fudge <- function(mu, obj, debug = FALSE) {
     counts <- so$par[counts]
 
     n_chains <- length(obj$fit@stan_args)
+    
     ## pars <- so$par
 ### Get the global adjustment, add it on to all intercepts
 
