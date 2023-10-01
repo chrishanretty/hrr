@@ -218,7 +218,7 @@ fudge <- function(mu, obj, debug = FALSE) {
         }
         pr <- so$par[grep("^pr", names(so$par))]
     }
-    if (inherits(so, "try-error") | (so$return_code > 0) {
+    if (inherits(so, "try-error") | (so$return_code > 0)) {
         ### stop("L-BFGS optimization failed: try thinning more")
         message("LBFGS optimization failed, trying Newton with zero inits")
         so <- rstan::optimizing(sm, algorithm = "Newton", data = stan_data, 
