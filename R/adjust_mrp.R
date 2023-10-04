@@ -4,9 +4,251 @@
 #' in an existing model.
 #'
 #' @param obj an object created by calling `hrr` with argument `mrp_only` set to TRUE
-#' @param nthin number of iterations to keep
 #'
 #' @export
+adjust_mrp <- function(obj) {
+
+    n_areas <- nrow(obj$data$aggy)
+    n_chains <- length(obj$fit@stan_args)
+    n_iter <- (obj$fit@sim$iter - obj$fit@sim$warmup) *
+        n_chains
+    
+    n_parties <- ncol(obj$data$aggy)
+    
+### #################################
+### ASSEMBLE THE VARIABLES FROM THE FIT
+### #################################
+    param_names <- names(obj$fit)
+
+    alpha_names <- grep("Intercept_mu",
+                        param_names,
+                        fixed = TRUE,
+                        value = TRUE)
+
+    alpha <- rstan::extract(obj$fit,
+                            pars = alpha_names,
+                            permute = FALSE)
+
+    alpha <- hrr:::collapse_chains(alpha)    
+
+    nCats <- ncol(alpha)
+    zvars <- grep("^z_", param_names, value = TRUE)
+    the_zvar <- as.numeric(sub("z_([0-9]+)_.*", "\\1", zvars))
+    ncatvars <- max(the_zvar)
+
+    depvar_levels <- sub("z_[0-9]+_(.*?)\\[.*", "\\1", zvars)
+    depvar_levels <- unique(depvar_levels)
+
+    ## Get continuous predictors, storing them as a named list, where
+    ## names are depvar_levels
+    beta <- lapply(depvar_levels, function(i) {
+        matches <- grep(paste0("^b_mu", i),
+                        param_names,
+                        value = TRUE)
+        hrr:::collapse_chains(
+                  rstan::extract(obj$fit,
+                                 pars = matches,
+                                 permute = FALSE))
+        
+    })
+    
+    names(beta) <- depvar_levels
+
+### Get categorical variables
+### These will be stored in a list-of-lists
+### first-level: depvar_levels
+    ## second-level: number of variable
+    eta <- vector(mode = "list", length = length(depvar_levels))
+    names(eta) <- depvar_levels
+
+    for (i in depvar_levels) {
+        matches <- grep(paste0("^r_[0-9]+_", i),
+                         param_names,
+                        value = TRUE)
+        n_cat_vars <- sub("r_([0-9]+)_.*", "\\1", matches)
+        n_cat_vars <- max(as.numeric(n_cat_vars))
+
+        tmp <- vector(mode = "list", length = n_cat_vars)
+        for (j in 1:n_cat_vars) {
+            matches <- grep(paste0("^r_", j, "_", i),
+                            param_names,
+                            value = TRUE)
+            tmp[[j]] <- hrr:::collapse_chains(
+                rstan::extract(obj$fit,
+                               pars = matches,
+                               permute = FALSE))
+        }
+        eta[[i]] <- tmp
+    }
+
+### Handle outcomes
+    outcomes <- obj$data$aggy
+    outcomes <- replace(outcomes,
+                        outcomes == 0,
+                        .Machine$double.eps^0.25)
+    
+### #################################
+### Create the linear predictor by iter
+### #################################
+
+### Create holders for the area and group summaries
+    area_holder <- vector(mode = "list", length = n_iter)
+    grp_holder <- vector(mode = "list", length = n_iter)
+    adj_holder <- array(0,
+                        dim = c(n_iter, n_areas,
+                                length(depvar_levels)))
+    for (idx in seq_len(n_iter)) {
+        ##     ### alpha is an array with dimensions n_iter by nChoices - 1
+        local_alpha <- alpha[idx, ]
+### beta is a list of size nChoices with entries arrays n_iter by dim(X)
+        local_beta <- lapply(beta, function(x)x[idx,])
+### eta is a list of lists
+        local_eta <- lapply(eta, function(x) lapply(x, function(z)z[idx,]))
+        
+        mu <- matrix(0,
+                     nrow = obj$data$ps_N,
+                     ncol = length(depvar_levels))
+        
+        for (i in depvar_levels) {
+            cat_posn <- which(depvar_levels == i)
+            mu[,cat_posn] <- local_alpha[cat_posn] +
+                tcrossprod(local_beta[[i]], obj$data$ps_X)
+            for (j in 1:n_cat_vars) {
+                cat_level <- obj$data[[paste0("ps_J_", j)]]
+                mu[,cat_posn] <- mu[,cat_posn] +
+                    local_eta[[i]][[j]][cat_level]
+            }
+        }
+        
+        ### find the per-iter adjustment
+        adj <- matrix(0, nrow = n_areas, ncol = length(depvar_levels))
+        
+        for (j in 1:n_areas) {
+            outcome <- outcomes[j, ]
+            this_area <- seq.int(from = obj$data$areastart[j],
+                                 to = obj$data$areastop[j],
+                                 by = 1)
+            this_area_mu <- mu[this_area, ]
+            res <- logit_swing(outcome = unlist(outcome),
+                               linpreds = this_area_mu,
+                               weights = obj$data$ps_counts[this_area])
+            adj[j, ] <- res
+            ## Store also in the global holder
+            adj_holder[idx, j, ] <- res
+        }
+        
+        mu <- mu + adj[obj$data$ps_area, ]
+        mu <- cbind(0, mu)
+        ## calculate the group support        
+        emu <- exp(mu)
+        pr <- emu / rowSums(emu)
+        
+        ## convert to counts
+        count_mat <- matrix(obj$data$ps_counts,
+                            nrow = nrow(pr),
+                            ncol = ncol(pr),
+                            byrow = FALSE)
+        counts <- pr * count_mat
+        
+        rm(pr); rm(mu); rm(count_mat); rm(emu)
+
+            ### Summarize these counts by area and group
+        nAreas <- length(unique(obj$area_smry$area))
+        nGroups <- length(unique(obj$grp_smry$var_name))
+        
+        area_counts <- aggregate(counts,
+                                 list(area = obj$data$ps_area),
+                                 sum)
+        area_totals <- aggregate(obj$data$ps_counts,
+                                 list(area = obj$data$ps_area),
+                                 sum)
+        
+        for (i in 2:ncol(area_counts)) {
+            area_counts[,i] <- area_counts[,i] / area_totals$x[area_counts$area]
+        }
+        
+### Now tidy this up for formatting
+        colnames(area_counts)[2:ncol(area_counts)] <- colnames(obj$data$aggy)
+
+        area_holder[[idx]] <- area_counts
+        
+        all_group_counts <- list()
+        for (g in 1:nGroups) {
+            grp_var <- paste0("ps_J_", g)
+            group_counts <- aggregate(counts,
+                                      list(group = obj$data[[grp_var]]),
+                                      sum)
+            
+            group_totals <- aggregate(obj$data$ps_counts,
+                                      list(group = obj$data[[grp_var]]),
+                                      sum)
+            
+            for (i in 2:ncol(group_counts)) {
+                group_counts[,i] <- group_counts[,i] / group_totals$x[group_counts$group]
+            }
+            all_group_counts[[g]] <- group_counts
+        }
+        
+        grp_holder[[idx]] <- all_group_counts
+
+
+    }
+
+### add index to are and group holders
+    area_holder <- lapply(seq_len(length(area_holder)), function(i) {
+        tmp <- area_holder[[i]]
+        tmp$iter <- i
+        tmp$area <- obj$areas[1:nrow(tmp)]
+        return(tmp)
+    })
+    area_holder <- do.call("rbind", area_holder)
+    
+    grp_holder <- lapply(seq_len(length(grp_holder)), function(i) {
+        ### tmp is a list of lists
+        tmp <- grp_holder[[i]]
+        for (j in seq_len(length(tmp))) {
+            names(tmp[[j]]) <- c("group",
+                                 colnames(obj$data$aggy))
+            tmp[[j]]$var_name <- obj$catlu[[j]]$var
+            tmp[[j]]$var_level <- obj$catlu[[j]]$levels[tmp[[j]]$group]
+            tmp[[j]]$iter <- i
+        }
+        return(do.call("rbind", tmp))
+    })
+
+    grp_holder <- do.call("rbind", grp_holder)
+    
+## ### Fit the adjustments back in the object?
+    area_re_counter <- length(obj$catlu) + 1
+    for (i in seq_len(n_chains)) {
+        for (j in seq_len(nAreas)) {
+            for (k in 2:n_parties) {
+                local_adj <- adj_holder[,j,k-1]
+### Which iters come from chain i?
+                chain <- rep(1:n_chains,
+                             each = length(local_adj) / n_chains)
+                local_adj <- local_adj[which(chain == i)]
+### Which slots in the model object must we overwrite?
+                tgt_var <- paste0("r_",
+                              area_re_counter,
+                              "_",
+                              j,
+                              "[",
+                              k,
+                              "]")
+                obj$fit@sim$samples[[i]][[tgt_var]] <- obj$fit@sim$samples[[i]][[tgt_var]] + local_adj
+            }
+        }
+    }
+    
+    retval <- list("Area" = area_holder,
+                   "Group" = grp_holder,
+                   "adjustments" = adj_holder,
+                   "model" = obj)
+
+    return(retval)
+}
+
 adjust_mrp <- function(obj, nthin = 25) {
 ### Thin everything down
 ### Get the predicted probabilities
@@ -22,6 +264,8 @@ adjust_mrp <- function(obj, nthin = 25) {
     counts <- fudge(mu, obj)
     new_obj <- counts$mod
     counts <- counts$counts
+
+    ### Process the counts
     counts <- data.frame(name = names(counts), count = counts, 
         row.names = NULL)
     counts$var_idx <- sub("ps_J_([0-9]+).*", "\\1", counts$name)
@@ -59,7 +303,8 @@ adjust_mrp <- function(obj, nthin = 25) {
             hi = quantile(x, 1 - 0.025)))
     out <- cbind(out[, 1:3], as.data.frame(out$prop))
     names(out) <- c(names(out)[1:3], "mean", "sd", "2.5%", "50%", 
-        "97.5%")
+                    "97.5%")
+    
     area_smry <- out[out$var == "area", ]
     area_smry <- area_smry[, c("var_level", "y.value", "mean", 
         "sd", "2.5%", "50%", "97.5%")]
@@ -143,6 +388,7 @@ get_inits <- function(obj) {
 }
 
 fudge <- function(mu, obj, debug = FALSE) {
+    ### Returns a list with a modified model object and a set of counts
     param_names <- names(obj$fit)
     nIter <- nrow(mu)
     nParties <- ifelse(is.na(dim(mu)[3]), 2, 1 + dim(mu)[3])
@@ -786,4 +1032,140 @@ recreate_support.categorical <- function(obj) {
     return(list(area_smry = area_smry,
                 group_smry = group_smry))
     
+}
+
+logit_swing <- function(outcome, linpreds, weights) {
+    stopifnot(is.vector(outcome))
+    if (length(outcome) == 1) {
+        stop("Outcome has to be a vector")
+    }
+    if (sum(outcome) != 1) {
+        pr <- outcome / sum(outcome)
+    }
+    
+    targets <- outcome[-1] / outcome[1]
+    if (ncol(linpreds) != (length(outcome) - 1)) {
+        stop("linear predictor should have one fewer column than outcomes")
+    }
+    
+    objfunc <- function(delta, tgt, mu, w8) {
+        pr <- exp(mu + delta)
+        actual <- sum(pr * w8) / sum(w8)
+        abserr <- abs(actual - tgt)
+        return(abserr)
+    }
+    results <- rep(NA, length(targets))
+    for (t in targets) {
+        idx <- which(targets == t)
+        oobj <- optimize(objfunc,
+                                 interval = c(-3, 3),
+                                 tgt = t,
+                                 mu = linpreds[,idx],
+                         w8 = weights)
+        results[idx] <- oobj$minimum
+        ### what to do when convergence not achieved?
+    }
+    
+    return(results)
+
+}
+
+fudge2 <- function(mu, obj, debug = FALSE) {
+    ### Returns a list with a modified model object and a set of counts
+
+    param_names <- names(obj$fit)
+    nIters <- nrow(mu)
+    nParties <- ifelse(is.na(dim(mu)[3]), 2, 1 + dim(mu)[3])
+    nAreas <- obj$data$nAreas
+    
+    if (nParties == 2) {
+        newmu <- array(0, dim = c(nrow(mu), ncol(mu), 1))
+        newmu[, , 1] <- mu
+        mu <- newmu
+        rm(newmu)
+    }
+    
+### Create something to hold the adjustments
+    adj <- array(0, dim = c(nIters, nAreas, nParties))
+    for (j in seq_len(nAreas)) {
+        print(j)
+### Get the intended outcome
+        outcome <- obj$data$aggy[j, ]
+### Are there any zeros in the outcome?
+        outcome <- replace(outcome,
+                           outcome == 0,
+                           .Machine$double.eps^0.25)
+### work out which portions of the mu to keep
+        this_area <- which(obj$data$ps_area == j)
+        this_area_mu <- mu[, this_area, ]
+        for (i in seq_len(nIters)) {
+            res <- logit_swing(outcome = unlist(outcome),
+                               linpreds = this_area_mu[i,,],
+                               weights = obj$data$ps_counts[this_area])
+            adj[i, j, -1] <- res
+        }
+    }
+
+### Add these adjustments on to the object
+### What is the position of the area random effects amongst the other random effects?
+    area_re_counter <- length(obj$catlu) + 1
+    n_chains <- length(obj$fit@stan_args)
+    for (i in seq_len(n_chains)) {
+        for (j in 2:nParties) {
+            for (k in seq_len(nAreas)) {
+### Work out the increment for this chain
+                inc <- adj[, k, j - 1]
+                corresponding_chain <- rep(1:n_chains, each = length(inc) / n_chains)
+                inc <- inc[which(corresponding_chain == i)]
+
+                tgt_var <- paste0("r_",
+                              area_re_counter,
+                              "_",
+                              j,
+                              "[",
+                              k,
+                              "]")
+                obj$fit@sim$samples[[i]][[tgt_var]] <- obj$fit@sim$samples[[i]][[tgt_var]] + inc
+            }
+            
+        }        
+    }
+    
+    ### 
+    return(list(mod = obj, counts = hrr:::recreate_support(obj)))
+}
+
+logit_swing <- function(outcome, linpreds, weights) {
+    stopifnot(is.vector(outcome))
+    olen <- length(outcome)
+    if (olen == 1) {
+        stop("Outcome has to be a vector")
+    }
+    osum <- sum(outcome)
+    if (osum != 1) {
+        pr <- outcome / osum
+    }
+    
+    targets <- outcome[-1] / outcome[1]
+    if (ncol(linpreds) != (olen - 1)) {
+        stop("linear predictor should have one fewer column than outcomes")
+    }
+    
+    objfunc <- function(delta, tgt, mu, w8) {
+        pr <- exp(mu + delta)
+        actual <- sum(pr * w8) / sum(w8)
+        abserr <- abs(actual - tgt)
+        return(abserr)
+    }
+    results <- sapply(targets, function(t) {
+        idx <- which(targets == t)
+        oobj <- optimize(objfunc,
+                         interval = c(-3, 3),
+                         tgt = t,
+                         mu = linpreds[,idx],
+                         w8 = weights)
+        return(oobj$minimum)
+    })
+    return(results)
+
 }
