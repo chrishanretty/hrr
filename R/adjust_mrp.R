@@ -285,3 +285,7 @@ logit_swing <- function(outcome, linpreds, weights) {
     return(results)
 
 }
+
+collapse_chains <- function(x) {
+    matrix(x, ncol = dim(x)[3])
+}
