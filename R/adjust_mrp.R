@@ -260,6 +260,9 @@ logit_swing <- function(outcome, linpreds, weights) {
     }
     
     targets <- outcome[-1] / outcome[1]
+    if (is.vector(linpreds)) {
+        linpreds <- matrix(linpreds, ncol = 1)
+    }
     if (ncol(linpreds) != (length(outcome) - 1)) {
         stop("linear predictor should have one fewer column than outcomes")
     }
