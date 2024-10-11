@@ -270,7 +270,8 @@ logit_swing <- function(outcome, linpreds, weights) {
     }
     
     objfunc <- function(delta, tgt, mu, w8) {
-        pr <- exp(mu + delta)
+        inv.logit <- plogis
+        pr <- plogis(mu + delta)
         actual <- sum(pr * w8) / sum(w8)
         abserr <- abs(actual - tgt)
         return(abserr)
