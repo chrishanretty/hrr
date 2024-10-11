@@ -251,15 +251,17 @@ adjust_mrp <- function(obj) {
 
 
 logit_swing <- function(outcome, linpreds, weights) {
+    ### The outcome should be a area-specific vector
     stopifnot(is.vector(outcome))
     if (length(outcome) == 1) {
         stop("Outcome has to be a vector")
     }
-    if (sum(outcome) != 1) {
-        pr <- outcome / sum(outcome)
-    }
+
+### The target is the proportion who chose each alternative level over the reference level
+    targets <- sapply(2:length(outcome), function(i) {
+        outcome[i] / sum(outcome[i] + outcome[1])
+    })
     
-    targets <- outcome[-1] / outcome[1]
     if (is.vector(linpreds)) {
         linpreds <- matrix(linpreds, ncol = 1)
     }
@@ -277,9 +279,9 @@ logit_swing <- function(outcome, linpreds, weights) {
     for (t in targets) {
         idx <- which(targets == t)
         oobj <- optimize(objfunc,
-                                 interval = c(-3, 3),
-                                 tgt = t,
-                                 mu = linpreds[,idx],
+                         interval = c(-3, 3),
+                         tgt = t,
+                         mu = linpreds[,idx],
                          w8 = weights)
         results[idx] <- oobj$minimum
         ### what to do when convergence not achieved?
