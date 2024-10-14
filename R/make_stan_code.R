@@ -366,20 +366,20 @@ make_data_code <- function(f, data, ps, aux) {
                    " matrix[ps_N, K_X] ps_X;  // \n")    
 
     for(i in 1:(ncatvars+1)) {
-        addon <- paste0(" int<lower=1, upper=N_", i, "> ps_J_", i,
-                        "[ps_N];  // grouping indicator per observation\n")
+        addon <- paste0(" array[ps_N] int<lower=1, upper=N_", i, "> ps_J_", i,
+                        ";  // grouping indicator per observation\n")
         code <- paste0(code,
                        addon)
     }
 
     code <- paste0(code,
-                   "\n int<lower=1,upper=ps_N> areastart[nAreas];\n int<lower=2,upper=ps_N> areastop[nAreas];\n")
+                   "\n array[nAreas] int<lower=1,upper=ps_N> areastart;\n array[nAreas] int<lower=2,upper=ps_N> areastop;\n")
 
     code <- paste0(code,
-                   " int<lower=1, upper=nAreas> ps_area[ps_N];\n")
+                   " array[ps_N] int<lower=1, upper=nAreas> ps_area;\n")
     
     code <- paste0(code,
-                   " int ps_counts[ps_N];\n")
+                   " array[ps_N] int ps_counts;\n")
 
     if (depvar_type == "cat" || depvar_type == "bin") { 
         code <- paste0(code,
