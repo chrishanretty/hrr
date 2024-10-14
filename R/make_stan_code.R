@@ -325,12 +325,12 @@ make_data_code <- function(f, data, ps, aux) {
         code <- paste0(code,
                        " int<lower=2> ncat;  // number of categories\n")
         code <- paste0(code,
-                       " int<lower=1, upper=ncat> Y[N];  // response variable\n")
+                       " array[N] int<lower=1, upper=ncat> Y;  // response variable\n")
     } else {
         code <- paste0(code,
                        " int<lower=2> ncat;  // number of categories\n")
         code <- paste0(code,
-                       " int<lower=1, upper=ncat> Y[N];  // response variable\n")
+                       " array[N] int<lower=1, upper=ncat> Y;  // response variable\n")
     }
 
 ### auxiliary predictors
