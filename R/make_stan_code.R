@@ -40,14 +40,14 @@ make_function_code <- function(f, data, ps, aux, adjust) {
     code <- "functions {\n"
 
     code <- paste0(code,
-                   "  int[] sequence(int start, int end) { \n  int seq[end - start + 1];\n  for (n in 1:num_elements(seq)) {\n seq[n] = n + start - 1; \n   }\n    return seq; \n  } \n")
+                   "  array[] int sequence(int start, int end) { \n  array[end - start + 1] int seq;\n  for (n in 1:num_elements(seq)) {\n seq[n] = n + start - 1; \n   }\n    return seq; \n  } \n")
     
     code <- paste0(code,
                    "\n\n")
 
     code <- paste0(code,
                    "
-  real dirichlet_multinomial_lpmf(int[] y, vector alpha) {
+  real dirichlet_multinomial_lpmf(array[] int y, vector alpha) {
     real alpha_plus = sum(alpha);
   
     return lgamma(alpha_plus) + sum(lgamma(alpha + to_vector(y))) 
@@ -381,7 +381,7 @@ make_data_code <- function(f, data, ps, aux) {
     code <- paste0(code,
                    " int ps_counts[ps_N];\n")
 
-    if (depvar_type == "cat" | depvar_type == "bin") { 
+    if (depvar_type == "cat" || depvar_type == "bin") { 
         code <- paste0(code,
                        " int aggy[nAreas, ncat];\n")
     } else {
