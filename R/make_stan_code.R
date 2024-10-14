@@ -348,9 +348,9 @@ make_data_code <- function(f, data, ps, aux) {
     for(i in 1:(ncatvars+1)) {
         addon <- paste0("  int<lower=1> N_", i,
                         ";  // number of grouping levels\n",
-                        " int<lower=1, upper = N_", i,
+                        " array[N] int<lower=1, upper = N_", i,
                         "> J_", i,
-                        "[N];  // grouping indicator per observation\n")
+                        ";  // grouping indicator per observation\n")
         code <- paste0(code,
                        addon)
     }
