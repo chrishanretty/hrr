@@ -45,17 +45,18 @@ make_function_code <- function(f, data, ps, aux, adjust) {
     code <- paste0(code,
                    "\n\n")
 
-    code <- paste0(code,
-                   "
-  real dirichlet_multinomial_lpmf(array[] int y, vector alpha) {
-    real alpha_plus = sum(alpha);
+    ## This has now been integrated into Stan Math
+##     code <- paste0(code,
+##                    "
+##   real dirichlet_multinomial_lpmf(array[] int y, vector alpha) {
+##     real alpha_plus = sum(alpha);
   
-    return lgamma(alpha_plus) + sum(lgamma(alpha + to_vector(y))) 
-                - lgamma(alpha_plus+sum(y)) - sum(lgamma(alpha));
-  }
+##     return lgamma(alpha_plus) + sum(lgamma(alpha + to_vector(y))) 
+##                 - lgamma(alpha_plus+sum(y)) - sum(lgamma(alpha));
+##   }
 
-"
-)
+## "
+## )
     
 ### (1) Predicted probabilities
 ### (a) function beginning
