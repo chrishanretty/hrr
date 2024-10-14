@@ -383,7 +383,7 @@ make_data_code <- function(f, data, ps, aux) {
 
     if (depvar_type == "cat" || depvar_type == "bin") { 
         code <- paste0(code,
-                       " int aggy[nAreas, ncat];\n")
+                       " array[nAreas, ncat] int aggy;\n")
     } else {
         stop("Only categorical variables supported")
     }
@@ -425,7 +425,7 @@ make_tdata_code <- function(f, data, ps, aux) {
  matrix[N, K_X] Xc;  // centered version of X
  matrix[ps_N, K_X] ps_Xc;  // centered version of ps_X
  vector[K_X] means_X;  // column means of X
- int seq[N] = sequence(1, N);
+ array[N] int seq = sequence(1, N);
 "
     code <- paste0(code,
 "
