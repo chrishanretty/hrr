@@ -116,7 +116,7 @@ make_function_code <- function(f, data, ps, aux, adjust) {
 
     code <- paste0(code,
                    "    // linear predictor matrix
-    vector[ncat] mu[N];\n")
+    array[N] vector[ncat] mu;\n")
 
     code <- paste0(code,
                    "      for (n in 1:N) {\n")
