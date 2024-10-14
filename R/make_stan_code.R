@@ -781,7 +781,7 @@ make_genquant_code <- function(f, data, ps, aux, adjust) {
 ### Initialize category-specific counts
     for (i in 1:(ncatvars+1)) {
         code <- paste0(code,
-                       paste0(" array[N_", i, ", ncat] int ps_J_", i, ";\n"))
+                       paste0(" array[N_", i, ", ncat] int ps_J_", i, "_counts;\n"))
     }
 
     code <- paste0(code,
