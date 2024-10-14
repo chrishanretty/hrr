@@ -68,7 +68,7 @@ make_function_code <- function(f, data, ps, aux, adjust) {
     }
     
     code <- paste0(code,
-                   "int start, int end, int ncat, int[] Y, matrix Xc, \n")
+                   "int start, int end, int ncat, array[] int Y, matrix Xc, \n")
 
 ### (b) Alternative specific parameters
     for(d in dv_levels[-1]) {
@@ -88,13 +88,13 @@ make_function_code <- function(f, data, ps, aux, adjust) {
 
 ### (c) Data
     for (k in 1:(ncatvars+1)) {
-        addon <- paste0("int[] J_", k, ", ")
+        addon <- paste0("array[] int J_", k, ", ")
         code <- paste0(code, addon)
     }
 
 ### Close data block with weights
     code <- paste0(code,
-                   " int[] weights) {")
+                   " array[] int weights) {")
 
     code <- paste0(code,
                    "
@@ -179,7 +179,7 @@ make_function_code <- function(f, data, ps, aux, adjust) {
 
     ### (2) Reduce sum
     code <- paste0(code,
-                   "  real partial_log_lik(int[] seq, int start, int end, int ncat, int[] Y, matrix Xc,  ")
+                   "  real partial_log_lik(array[] int seq, int start, int end, int ncat, array[] int Y, matrix Xc,  ")
 
     ### Copy code from above
 ### (b) Alternative specific parameters
@@ -200,7 +200,7 @@ make_function_code <- function(f, data, ps, aux, adjust) {
 
 ### (c) Data
     for (k in 1:(ncatvars+1)) {
-        addon <- paste0("int[] J_", k)
+        addon <- paste0("array[] int J_", k)
         if (k < (ncatvars+1)) {
             addon <- paste0(addon, ", ")
         }
